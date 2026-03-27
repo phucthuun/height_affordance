@@ -1,9 +1,9 @@
 %% Preparations 
-totalTic = tic;
 sca;            % Close PTB windows
 close all;      % Close MATLAB figures
 clearvars;      % Clear variables
 clc;            % Clear command window
+totalTic = tic;
  
 %% Set paths (using your existing logic)
 loc = find_folderpath(); 
@@ -104,7 +104,7 @@ fprintf('Starting experiment. Press Space to begin.\n');
 waitforkey(32); 
 log.time.start = datestr(now);
 
-
+totalTic = tic;
 for t = 1:numTrials
     % Prepare Info String (Trial X | Stance X | Laterality X)
     % Note: Replace '.stance' with whatever field name is in your 'trials' struct
@@ -175,3 +175,5 @@ Screen('Close', texConstant);
 sca;
 % save(log.savePath, 'log');
 disp('Experiment Complete.');
+
+fprintf('Experiment Complete in %.2f seconds.\n', toc(totalTic));
