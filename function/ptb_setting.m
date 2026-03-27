@@ -10,10 +10,12 @@ function ptb = ptb_setting(log)
     bgColor = log.config.task.bg; 
     
     s1 = max(Screen('Screens'));
-    s2 = min(Screen('Screens')); 
+    s2 = max(Screen('Screens'))-1; 
     
-    [ptb.w1, ptb.rect1] = Screen('OpenWindow', s1, bgColor);
-    [ptb.w2, ptb.rect2] = Screen('OpenWindow', s2, bgColor);
+    [ptb.w1, ptb.rect1] = Screen('OpenWindow', s1, bgColor); 
+    Screen('BlendFunction', ptb.w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); % Enable Alpha Blending for transparency
+    % [ptb.w2, ptb.rect2] = Screen('OpenWindow', s2, bgColor);
+    % Screen('BlendFunction', ptb.w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); % Enable Alpha Blending for transparency
     
     % --- 3. Measurements & Timing ---
     [ptb.sw, ptb.sh] = Screen('WindowSize', ptb.w1);
