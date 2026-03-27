@@ -1,8 +1,8 @@
-function [terminate]=waitforkey(waitforkey)
+function [terminate]=waitforkey(targetKey)
 while 1
     [secs, keyCodelist, deltaSecs] = KbWait([]);
     keyCode=find(keyCodelist==1);
-    if keyCode==waitforkey
+    if keyCode==targetKey
         terminate=0; WaitSecs(1);
         break
     elseif keyCode==27

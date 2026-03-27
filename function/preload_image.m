@@ -1,4 +1,4 @@
-function stimuli = preload_images(stim_path, save_path)
+function stimuli = preload_image(stim_path, save_path)
     startTime = tic; % Global start timer
     
     % 1. Get all JPG files

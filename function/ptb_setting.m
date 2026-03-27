@@ -1,52 +1,38 @@
 % PTB-3 settings
-function ptbconfig = ptb_setting(log)
-% 1. DO NOT CALL Screen('OpenWindow') HERE.
-% Instead, grab the pointers we already created in initialize_PTB
-ptbconfig.window1 = log.config.ptb.window1; % Participant
-ptbconfig.window2 = log.config.ptb.window2; % Instructor
-
-% 2. Get the Rects from the existing windows
-ptbconfig.windowRect1 = Screen('Rect', ptbconfig.window1);
-ptbconfig.windowRect2 = Screen('Rect', ptbconfig.window2);
-
-% 3. Get the size
-[ptbconfig.screenXpixels1, ptbconfig.screenYpixels1] = Screen('WindowSize', ptbconfig.window1);
-[ptbconfig.screenXpixels2, ptbconfig.screenYpixels2] = Screen('WindowSize', ptbconfig.window2);
-
-% 4. Get the centre coordinate
-[ptbconfig.xCenter1, ptbconfig.yCenter1] = RectCenter(ptbconfig.windowRect1);
-[ptbconfig.xCenter2, ptbconfig.yCenter2] = RectCenter(ptbconfig.windowRect2);
-
-% ... [Rest of your BlendFunction and Key settings remain the same] ...
-
-% Set the blend funciton for the screen
-Screen('BlendFunction', ptbconfig.window1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
-Screen('BlendFunction', ptbconfig.window2, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); 
-
-% get refresh rate of monitor 1 and 2
-ptbconfig.ifi1=Screen('GetFlipInterval',(ptbconfig.window1));
-ptbconfig.ifi2=Screen('GetFlipInterval',(ptbconfig.window2));
-
-% Key settings
-KbName('KeyNamesWindows');
-
-keysOfInterest=zeros(1,256);
-keysOfInterest(27)=1; %esc
-keysOfInterest(32)=1; %space
-keysOfInterest(37)=1; %left
-keysOfInterest(39)=1; %right
-keysOfInterest(48)=1; %'0' above letters 
-keysOfInterest(49)=1; %'1' above letters 
-keysOfInterest(96)=1; %'0' in right panel
-keysOfInterest(97)=1; %'1' in right panel
-ptbconfig.key.keysEnabled  = keysOfInterest;
-
-
-% Unififed specifications:
-RestrictKeysForKbCheck([32, 97:99, 27]);
-
-%set which device is used for key responses
-ptbconfig.device=0; %o=keyboard= default/button box USB, 1= buttonbox EEG
-
-% Hides cursor when window appears
-HideCursor;
+function ptb = ptb_setting(log)
+    % --- 1. System Setup ---
+    PsychDefaultSetup(2);
+    Screen('Preference', 'SkipSyncTests', 1);
+    KbName('UnifyKeyNames');
+    
+    % --- 2. Window Setup ---
+    % Accessing background color from the nested log structure
+    bgColor = log.config.task.bg; 
+    
+    s1 = max(Screen('Screens'));
+    s2 = min(Screen('Screens')); 
+    
+    [ptb.w1, ptb.rect1] = Screen('OpenWindow', s1, bgColor);
+    [ptb.w2, ptb.rect2] = Screen('OpenWindow', s2, bgColor);
+    
+    % --- 3. Measurements & Timing ---
+    [ptb.sw, ptb.sh] = Screen('WindowSize', ptb.w1);
+    [ptb.xc, ptb.yc] = RectCenter(ptb.rect1);
+    ptb.ifi = Screen('GetFlipInterval', ptb.w1);
+    
+    % --- 4. Inputs & Visuals ---
+    ptb.key.esc = KbName('ESCAPE');
+    ptb.key.space = KbName('space');
+    
+    % Restrict keys (Space and Esc)
+    RestrictKeysForKbCheck([ptb.key.space, ptb.key.esc]);
+    
+    % Use Arial (standard) or a font defined in your log
+    Screen('TextFont', ptb.w1, 'Arial');
+    Screen('TextSize', ptb.w1, 30);
+    
+    % Enable transparency for images/fixation
+    Screen('BlendFunction', ptb.w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+    
+    HideCursor;
+end
