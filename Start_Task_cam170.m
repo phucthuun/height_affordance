@@ -1,8 +1,9 @@
 %% Preparations 
-% sca;            % Close PTB windows
-% close all;      % Close MATLAB figures
-% clearvars;      % Clear variables
-% clc;            % Clear command window
+totalTic = tic;
+sca;            % Close PTB windows
+close all;      % Close MATLAB figures
+clearvars;      % Clear variables
+clc;            % Clear command window
  
 %% Set paths (using your existing logic)
 loc = find_folderpath(); 
@@ -16,9 +17,6 @@ log = struct;
 %% Task setting
 log.config.task = task_setting();
 log.config.stim = stim_setting();
-
-
-
 
 %% 3. Initialize PTB
 % Pass the WHOLE log. ptb_setting now returns everything into log.config.ptb
@@ -34,38 +32,23 @@ xc  = log.config.ptb.xc;
 yc  = log.config.ptb.yc;
 
 %% List and load stimuli
-% mat_file = fullfile(loc.stimuli, 'preloaded_stimuli.mat');
-% 
-% % List and load image stimuli
-% if exist(mat_file, 'file')
-%     fprintf('Loading preloaded stimulus file... please wait.\n');
-%     load(mat_file); % This brings the 'stimuli' variable into the workspace
-% else
-%     % Fallback if the .mat doesn't exist yet
-%     stimuli = preload_image(loc.stimuli, loc.stimuli);
-% end
-% 
-% numTrials = length(stimuli);
-% 
-% % Build Trials
-% trials = generate_trial_list(stimuli, loc.stimuli);
-% clear stimuli; % Free up RAM after building trial list
+% List, Randomize, and Load stimuli
+mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_randomize_3constraints.mat');
+mat_file = fullfile('C:\Data\Research\', 'MASTER_EXPERIMENT_DATA_randomize_3constraints.mat');
 
-%% List, Randomize, and Load stimuli
-% mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_rand3.mat');
-% 
-% if exist(mat_file, 'file')
-%     fprintf('Found existing randomized list. Loading...\n');
-%     data = load(mat_file, 'masterTrials'); 
-%     trials = data.masterTrials;
-% else
-%     fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
-%     trials = stimuli_randomize_preload(loc.stimuli, loc.stimuli);
-% end
-% 
-% numTrials = length(trials);
+if exist(mat_file, 'file')
+    fprintf('Found existing randomized list. Loading...\n');
+    data = load(mat_file, 'masterTrials'); 
+    trials = data.masterTrials;
+else
+    fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
+    % trials = stimuli_randomize_preload(loc.stimuli, loc.stimuli);
+    trials = stimuli_randomize_preload(loc.stimuli, fullfile('C:\Data\Research\'));
+end
 
+numTrials = length(trials);
 
+fprintf('Finished loading stimuli in %.2f seconds.\n', toc(totalTic));
 % Get dimensions from Trial 1
 [imgH, imgW, ~] = size(trials(1).neuData);
 aspectRatio = imgW / imgH;
@@ -78,26 +61,36 @@ top   = sh - drawH;
 
 posC = [left, top, left + drawW, sh];
 
-% --- Load Constant/Offload Image ---
-constantPath = fullfile(loc.constantpic, 'calibration.jpg');
+% 1. ENABLE BLENDING (Put this right after log.config.ptb = ptb_setting(log))
+Screen('BlendFunction', w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+
+% 2. LOAD CONSTANT IMAGE
+constantPath = fullfile(loc.constantpic, 'calibration.jpg'); % Use PNG for transparency
 
 if exist(constantPath, 'file')
-    % [img, ~, alpha] catches the RGB and the Transparency layer separately
     [img, ~, alpha] = imread(constantPath);
     
-    % Concatenate them into a 4-layer RGBA matrix
-    rgbaData = cat(3, img, alpha);
+    % If it's a PNG with alpha, combine. If alpha is empty (JPG), skip cat.
+    if ~isempty(alpha)
+        rgbaData = cat(3, img, alpha);
+    else
+        rgbaData = img;
+    end
     
-    % Create the texture using the 4-layer matrix
     texConstant = Screen('MakeTexture', w1, rgbaData);
+    
+    % Calculate dimensions (using the correct variable 'img')
+    [cHeight, cWidth, ~] = size(img);
+    cAspectRatio = cWidth / cHeight;
+    
+    % Define position for Constant (Centered, 100% of screen height)
+    offloadH = sh * 1.0; 
+    offloadW = offloadH * cAspectRatio;
+    posOffload = CenterRectOnPoint([0 0 offloadW offloadH], xc, yc);
 else
     error('Constant image not found at: %s', constantPath);
 end
 
-% Define position for Constant (Centered, 100% of screen height)
-offloadH = sh * 1.0; 
-offloadW = offloadH * (size(constantData,2)/size(constantData,1));
-posOffload = CenterRectOnPoint([0 0 offloadW offloadH], xc, yc);
 
 %% 5. Main Presentation Loop
 terminate = 0; 
