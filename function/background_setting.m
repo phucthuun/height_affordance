@@ -1,4 +1,4 @@
-function backgroundconfig=backgroundsetting
+function backgroundconfig=background_setting
 %% background
 
 % color palette

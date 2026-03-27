@@ -1,5 +1,5 @@
 % setting fixation cross 
-function stimconfig=stimsetting()
+function stimconfig=stim_setting()
 
 %%
 %width Feedback Box Item Spec 

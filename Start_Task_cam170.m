@@ -34,14 +34,14 @@
 
 
 %% 3. Initialize PTB & Settings
-cfg = initialize_PTB(cfg);
+cfg = initialize_PTB(cfg);  
 log.config.ptb.window1 = cfg.screens.window;          
 log.config.ptb.window2 = cfg.screens.windowInstructor; 
 log.time.start = datestr(now);
-log.config.background = backgroundsetting();
-log.config.ptb = ptbsetting(log);
-log.config.task = tasksetting(log);
-log.config.stim = stimsetting();
+log.config.background = background_setting();
+log.config.ptb = ptb_setting(log);
+log.config.task = task_setting(log);
+log.config.stim = stim_setting();
 
 %% 4. Global Positioning (Aspect Ratio & Bottom Alignment)
 % Get dimensions once (assuming all images are identical)

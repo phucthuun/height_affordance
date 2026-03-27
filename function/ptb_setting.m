@@ -1,5 +1,5 @@
 % PTB-3 settings
-function ptbconfig = ptbsetting(log)
+function ptbconfig = ptb_setting(log)
 % 1. DO NOT CALL Screen('OpenWindow') HERE.
 % Instead, grab the pointers we already created in initialize_PTB
 ptbconfig.window1 = log.config.ptb.window1; % Participant
