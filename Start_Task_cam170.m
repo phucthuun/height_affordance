@@ -24,6 +24,8 @@ log.config.stim = stim_setting();
 lib = lsl_loadlib();
 info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
 outlet = lsl_outlet(info);
+fprintf('EXPERIMENTER: Check for LSL Signal and start EEG Recording');
+waitforkey(32);
 
 %% 3. Initialize PTB
 % Pass the WHOLE log. ptb_setting now returns everything into log.config.ptb
