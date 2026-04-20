@@ -24,7 +24,7 @@ log.config.stim = stim_setting();
 lib = lsl_loadlib();
 info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
 outlet = lsl_outlet(info);
-fprintf('EXPERIMENTER: Check for LSL Signal and start EEG Recording');
+fprintf('EXPERIMENTER: Check for LSL Signal and start EEG Recording. Press SPACE to continue.');
 waitforkey(32);
 
 %% 3. Initialize PTB
@@ -43,7 +43,7 @@ yc  = log.config.ptb.yc;
 %% List and load stimuli
 % List, Randomize, and Load stimuli
 mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_crop.mat');
-mat_file = fullfile('C:\Data\Research\', 'MASTER_EXPERIMENT_DATA_crop.mat');
+% mat_file = fullfile('C:\Data\Research\', 'MASTER_EXPERIMENT_DATA_crop.mat');
 
 if exist(mat_file, 'file')
     fprintf('Found existing randomized list. Loading...\n');
@@ -60,7 +60,7 @@ numTrials = length(trials);
 fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
 % Get dimensions from Trial 1
 [imgH, imgW, ~] = size(trials(1).neuData);
-aspectRatio = imgW / imgH;
+aspectRatio = imgW /  imgH;
 
 % Calculate destRect
 drawH = sh * 180 / 170 * 1.0; 
@@ -111,38 +111,38 @@ texNeu = Screen('MakeTexture', w1, trials(1).neuData);
 texFgt = Screen('MakeTexture', w1, trials(1).fgtData);
 
 fprintf('Starting experiment. Press Space to begin.\n');
-waitforkey(32); 
+DrawFormattedText(w1, [' \n\n EXPERIMENT START'], 'center', 50, log.config.task.colour.white); Screen('Flip', w1);
+    
+
+% waitforkey(32); 
 log.time.start = datestr(now);
 
 totalTic = tic; outlet.push_sample({'Experiment_Start'}); 
 for t = 1:numTrials
     % Prepare Info String (Trial X | Stance X | Laterality X)
     % Note: Replace '.stance' with whatever field name is in your 'trials' struct
-    infoStr = sprintf('Trial %d/%d | Stance: %s | Lat: %s', ...
+    infoStr = sprintf('Trial %d/%d | Stance: %s | Laterality: %s', ...
         t, numTrials, string(trials(t).stance), string(trials(t).laterality));
     
     % --- PHASE 0: OFFLOAD / CONSTANT (2.0s) ---
-    % Screen('DrawTexture', w1, texConstant, [], posC);
-    % DrawFormattedText(w1, [infoStr ' \n\n PHASE: OFFLOAD'], 'center', 50, log.config.task.colour.white);
-    % 
-    % Screen('DrawLines', w1, log.config.stim.fix.allCoords, ...
-    %     log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc, yc]);
-    % 
-    % onset_offload = Screen('Flip', w1);
-    % outlet.push_sample({'Trial_Calibration_Start'}); % This sends the marker to mBraintrain
-    % 
+    Screen('DrawTexture', w1, texConstant, [], posC);
+    DrawFormattedText(w1, [' \n\n PHASE: CALIBRATION'], 'center', 50, log.config.task.colour.white);
+    
+    onset_offload = Screen('Flip', w1);
+    outlet.push_sample({'Trial_Calibration_S tart'}); % This sends the marker to mBraintrain
+    
     % % --- PHASE 0.5: PRE-STIMULUS FIXATION (0.25s) ---
-    % Screen('DrawLines', w1, log.config.stim.fix.allCoords, ...
-    %     log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc, yc]);
-    % DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIXATION'], 'center', 50, log.config.task.colour.white);
-    % onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
-    % outlet.push_sample({'Trial_Calibration_Done'}); % This sends the marker to mBraintrain
+    Screen('DrawLines',  w1, log.config.stim.fix.allCoords, ...
+        log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc, yc]);
+    DrawFormattedText(w1, [infoStr ' \n\n PHASE:  FIXATION'], 'center', 50, log.config.task.colour.white);
+    onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
+    outlet.push_sample({'Trial_Calibration_Done'}); % This sends the marker to mBraintrain
 
     % --- PHASE 1: NEUTRAL (0.5s) ---
     Screen('DrawTexture', w1, texNeu, [], posC);
     DrawFormattedText(w1, [infoStr ' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
-    % onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
-    onset_neu = Screen('Flip', w1);
+    onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
+%     onset_neu = Screen('Flip', w1);
     % outlet.push_sample({'Neutral_Onset'}); % This sends the marker to mBraintrain
     outlet.push_sample({sprintf('T%d_Neu_St%s_Lat%s', t, string(trials(t).stance), trials(t).laterality)});
   
@@ -152,6 +152,7 @@ for t = 1:numTrials
     onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
     outlet.push_sample({'Fight_Stimulus'}); % This sends the marker to mBraintrain
 
+    waitforkey(32); 
     % --- ASYNCHRONOUS PREP (Trial T+1) ---
     if t < numTrials
         nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
@@ -167,9 +168,9 @@ for t = 1:numTrials
     
     % --- PHASE 3: ITI / POST-TRIAL FIX ATION ---
     Screen('DrawLines', w1, log.config.stim.fix.allCoords, ...
-        log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc-600, yc]);
+        log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc , yc]);
     DrawFormattedText(w1, [infoStr ' \n\n PHASE: ITI'], 'center', 50, log.config.task.colour.white);
-    fix_iti_onset = Screen('Flip', w1); outlet.push_sample({'Trial_Offset'}); % This sends the marker to mBraintrain
+    fix_iti_onset = Screen('Flip', w1); outlet.push_sample({'Trial_Offset'} ); % This sends the marker to mBraintrain
     
     % Resource Management
     Screen('Close', [texNeu, texFgt]);
