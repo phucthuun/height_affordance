@@ -1,4 +1,8 @@
+/apps-to-copy/
+/programs_lsl/
 /stimuli/
+/test_data/
+/xsens_labstreaminglayer_link-master/
 *.xlsx
 *.html
 *.png
