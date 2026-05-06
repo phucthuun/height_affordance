@@ -1,7 +1,5 @@
 function masterTrials = stimuli_randomize_preload(stimDir, saveDir)
 
-    stimDir=loc.stimuli;
-    saveDir=loc.stimuli;
     totalTic = tic;
     
     %% --- STEP 1: EXTRACT NAMES & METADATA ---
@@ -13,7 +11,7 @@ function masterTrials = stimuli_randomize_preload(stimDir, saveDir)
                       'laterality', {}, 'scenario', {}, 'posture', {}, 'exemplar', {});
     
     % Updated Regex to match your specific filename format
-    pattern = 'sub-([\w\d]+)_cam-\d+_scenario-(\w+)_posture-(\w+)_stance-(\d+)_laterality-([\w-]+)_exemplar-(\d+)';
+    pattern = 'cropped-mat_sub-([\w\d]+)_cam-(\d+)_scenario-(\w+)_posture-(\w+)_stance-(\d+)_laterality-([\w-]+)_exemplar-(\d+)';
     
     count = 1;
     for i = 1:length(allFiles)
@@ -22,11 +20,12 @@ function masterTrials = stimuli_randomize_preload(stimDir, saveDir)
             t = tokens{1};
             tempStim(count).name       = allFiles(i).name;
             tempStim(count).subID      = string(t{1});
-            tempStim(count).scenario   = string(t{2}); % Cast to string
-            tempStim(count).posture    = string(t{3}); % Cast to string
-            tempStim(count).stance     = str2double(t{4});
-            tempStim(count).laterality = string(t{5}); % Cast to string
-            tempStim(count).exemplar   = string(t{6});
+            tempStim(count).cam        = str2double(t{2});
+            tempStim(count).scenario   = string(t{3}); % Cast to string
+            tempStim(count).posture    = string(t{4}); % Cast to string
+            tempStim(count).stance     = str2double(t{5});
+            tempStim(count).laterality = string(t{6}); % Cast to string
+            tempStim(count).exemplar   = string(t{7});
             count = count + 1;
         end
     end
@@ -35,35 +34,45 @@ function masterTrials = stimuli_randomize_preload(stimDir, saveDir)
         error('Regex Failed. No files matched. Check if you are looking for .png or .jpg');
     end
 
-    %% --- STEP 2: PAIRING (Filename Logic Only) ---
-    fprintf('Step 2: Pairing Filenames...\n');
+    %% --- STEP 2: PAIRING (Capturing All Metadata) ---
+    fprintf('Step 2: Pairing Filenames & Metadata...\n');
     
-    % Extract fields into string arrays first. This is fast and prevents the "Dot Indexing" error.
+    % Convert fields to arrays for speed
     allScenarios = [tempStim.scenario];
-    allPostures  = [tempStim.posture];
     allSubs      = [tempStim.subID];
     allExemplars = [tempStim.exemplar];
     
-    % Find all 'fight' 'lowered' triggers
-    fgtIdx = find(allScenarios == "fight" & allPostures == "lowered");
+    % Find all Fight images
+    fgtIdx = find(allScenarios == "fight");
     
-    rawPairs = [];
+    % Pre-allocate the struct with all requested fields
+    rawPairs = struct('subID', {}, ...
+                      'neuName', {}, 'fgtName', {}, ...
+                      'cam', {}, 'posture', {}, 'stance', {}, ...
+                      'laterality', {}, 'exemplar', {});
+    
     pairCount = 1;
-    
     for i = 1:length(fgtIdx)
         f = tempStim(fgtIdx(i));
         
-        % Search for the corresponding 'neutral' baseline
-        nIdx = find(allScenarios == "neutral" & ...
-                    allSubs      == f.subID & ...
-                    allExemplars == f.exemplar);
+        % Find Neutral match (Subject + Exemplar)
+        nMatch = find(allScenarios == "neutral" & ...
+                      allSubs      == f.subID & ...
+                      allExemplars == f.exemplar);
         
-        if ~isempty(nIdx)
+        if ~isempty(nMatch)
+            % Fill the table with the Fight image's specific info
             rawPairs(pairCount).subID      = f.subID;
+            rawPairs(pairCount).neuName    = tempStim(nMatch(1)).name;
+            rawPairs(pairCount).fgtName    = f.name;
+            
+            % Metadata specific to the Fight stimulus
+            rawPairs(pairCount).cam        = f.cam;
+            rawPairs(pairCount).posture    = f.posture;
             rawPairs(pairCount).stance     = f.stance;
             rawPairs(pairCount).laterality = f.laterality;
-            rawPairs(pairCount).neuName    = tempStim(nIdx(1)).name;
-            rawPairs(pairCount).fgtName    = f.name;
+            rawPairs(pairCount).exemplar   = f.exemplar;
+            
             pairCount = pairCount + 1;
         end
     end
@@ -145,6 +154,6 @@ function masterTrials = stimuli_randomize_preload(stimDir, saveDir)
 
     %% --- STEP 5: SAVE TO .MAT ---
     fprintf('Step 5: Saving to .mat file...\n');
-    % save(fullfile(saveDir, 'MASTER_EXPERIMENT_DATA_rand3.mat'), 'masterTrials', '-v7.3');
+    save(fullfile(saveDir, 'MASTER_EXPERIMENT_DATA_randomize_3constraints.mat'), 'masterTrials', '-v7.3');
     fprintf('Finished in %.2f seconds.\n', toc(totalTic));
 end
