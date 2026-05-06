@@ -14,8 +14,10 @@ loc.idgrap = string(regexp(loc.script, '.*?private', 'match'));
 % Get folder path to functions and configs, stimuli folder
 loc.function = fullfile(loc.root,'function');
 % loc.stimuli = fullfile(loc.root,'stimuli','pilot');
-loc.stimuli = fullfile(loc.root,'stimuli','cam-170-select');
+loc.stimuli = fullfile(loc.root,'stimuli','cam-165-select','cropped');
+% loc.stimuli = fullfile(loc.root,'stimuli','crop-select');
+% loc.stimuli = fullfile(loc.root,'stimuli','align-select');
 loc.constantpic = fullfile(loc.root,'stimuli','constant');
 % Specify path to retrieve and save data 
-loc.result = fullfile(loc.root,'result');
+loc.result = fullfile('C:\Users\exp-idgrap\Desktop\xplo-judo-data');
 end
