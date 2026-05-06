@@ -1,38 +1,49 @@
-%% Preparations 
+%% 1. Preparations 
 sca;            % Close PTB windows
 close all;      % Close MATLAB figures
 clearvars;      % Clear variables
 clc;            % Clear command window
 totalTic = tic;
  
-%% Set paths (using your existing logic)
-loc = find_folderpath(); 
+%% Set paths
+loc = find_folderpath();  
 add_paths(loc); 
  
-
 %% Creating a log file and configuration
 log = struct;
 [log.ID, loc.resulttable] = subject_info(loc);
-%% 
-
+ 
 %% Task setting
-log.config.task = task_setting();
+log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
-% LSL: Describe the marker stream
-% Name: 'MATLAB_Markers', Type: 'Markers', Channels: 1, Rate: 0 (Irregular), Format: string
-lib = lsl_loadlib();
-info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
-outlet = lsl_outlet(info);
-fprintf('EXPERIMENTER: Check for LSL Signal and start EEG Recording. Press SPACE to continue.');
-waitforkey(32);
+
+%% List and load stimuli
+mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_randomize_3constraints.mat');
+if exist(mat_file, 'file')
+    fprintf('Found existing randomized list. Loading...\n');
+    data = load(mat_file, 'masterTrials'); 
+    blocks = data.masterTrials;
+else
+    fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
+    blocks = stimuli_randomize_preload_4block(loc.stimuli, loc.stimuli);
+end
+ 
+fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
+
+%% Result table
+% Calculate total trials across all blocks
+numTotalTrials = sum(cellfun(@length, blocks));
+
+% Pre-allocate with fixed size
+results = table('Size', [numTotalTrials, 7], ...
+    'VariableTypes', {'double', 'double', 'double', 'string', 'double', 'string', 'double'}, ...
+    'VariableNames', {'block', 'trial_id', 'cam', 'posture', 'stance', 'laterality', 'exemplar'});
 
 %% 3. Initialize PTB
-% Pass the WHOLE log. ptb_setting now returns everything into log.config.ptb
 log.config.ptb = ptb_setting(log);
 
-%% 4. Global Positioning (Aspect Ratio & Bottom Alignment)
-% Using the new short names from log.config.ptb
+%% 4. Global Positioning (Width-Matched & Bottom Aligned)
 w1  = log.config.ptb.w1;
 sw  = log.config.ptb.sw;
 sh  = log.config.ptb.sh;
@@ -40,157 +51,176 @@ ifi = log.config.ptb.ifi;
 xc  = log.config.ptb.xc;
 yc  = log.config.ptb.yc;
 
-%% List and load stimuli
-% List, Randomize, and Load stimuli
-mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_crop.mat');
-% mat_file = fullfile('C:\Data\Research\', 'MASTER_EXPERIMENT_DATA_crop.mat');
+% Define the target physical dimensions
+targetWidth = 400; 
+targetHeight = 225; 
+targetShift = 2;
 
-if exist(mat_file, 'file')
-    fprintf('Found existing randomized list. Loading...\n');
-    data = load(mat_file, 'masterTrials'); 
-    trials = data.masterTrials;
-else
-    fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
-    trials = crop_stimuli_randomize_preload(loc.stimuli, loc.stimuli);
-    %trials = stimuli_randomize_preload(loc.stimuli, fullfile('C:\Data\Research\'));
-end
- 
-numTrials = length(trials);
+% Conversion: How many pixels are in 2cm?
+% (sh / 225) gives pixels per cm. Multiply by 2.
+verticalShift = (sh / targetHeight) * targetShift; 
 
-fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
-% Get dimensions from Trial 1
-[imgH, imgW, ~] = size(trials(1).neuData);
-aspectRatio = imgW /  imgH;
+% Scaled height logic (16:9 ratio based on screen width)
+heightRatio = targetHeight / targetWidth; % 0.5625
 
-% Calculate destRect
-drawH = sh * 180 / 170 * 1.0; 
-drawW = drawH * aspectRatio;
-left  = (sw - drawW) / 2;
-top   = sh - drawH; 
+% % Or use the aspect ratio of the image
+% [imgH, imgW, ~] = size(trials(1).neuData);
+% heightRatio = imgH / imgR;
 
-posC = [left - 600, top, left + drawW - 600, sh];
-posC = [left, top, left + drawW, sh];
+drawW = sw;             
+drawH = sw * heightRatio; 
 
-% 1. ENABLE BLENDING (Put this right after log.config.ptb = ptb_setting(log))
-Screen('BlendFunction', w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
+% NEW POSITIONING: 
+% Subtract verticalShift from the standard bottom alignment (sh)
+newBottom = sh - verticalShift;
+newTop    = newBottom - drawH;
 
-% 2. LOAD CONSTANT IMAGE
-constantPath = fullfile(loc.constantpic, 'calibration.jpg'); % Use PNG for transparency
+posC = [0, newTop, sw, newBottom];
 
-if exist(constantPath, 'file')
-    [img, ~, alpha] = imread(constantPath);
-    
-    % If it's a PNG with alpha, combine. If alpha is empty (JPG), skip cat.
-    if ~isempty(alpha)
-        rgbaData = cat(3, img, alpha);
-    else
-        rgbaData = img;
-    end
-    
-    texConstant = Screen('MakeTexture', w1, rgbaData);
-    
-    % Calculate dimensions (using the correct variable 'img')
-    [cHeight, cWidth, ~] = size(img);
-    cAspectRatio = cWidth / cHeight;
-    
-    % Define position for Constant (Centered, 100% of screen height)
-    offloadH = sh * 1.0; 
-    offloadW = offloadH * cAspectRatio;
-    posOffload = CenterRectOnPoint([0 0 offloadW offloadH], xc, yc);
-else
-    error('Constant image not found at: %s', constantPath);
-end
+% Enable Alpha Blending (Keep this for transparency support)
+Screen('BlendFunction', w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); 
+
+%% 5. LSL: Describe the marker stream
+lib = lsl_loadlib();
+info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
+outlet = lsl_outlet(info);
+
+confirmation_text('Check for LSL Signal and start EEG Recording.\n');
 
 
-%% 5. Main Presentation Loop
-terminate = 0; 
+%% 6. Main Presentation Loop
+terminate = 0; globalTrialCount = 0;    
 fprintf('Preparing first trial textures...\n');
+log.time.start = datestr(now); outlet.push_sample({'Experiment_Start'});  
+totalTic = tic;  
 
-% Initial textures
-texNeu = Screen('MakeTexture', w1, trials(1).neuData);
-texFgt = Screen('MakeTexture', w1, trials(1).fgtData);
+for b = 1:1
 
-fprintf('Starting experiment. Press Space to begin.\n');
-DrawFormattedText(w1, [' \n\n EXPERIMENT START'], 'center', 50, log.config.task.colour.white); Screen('Flip', w1);
-    
+    trials = blocks{b}; numTrials = length(trials);
 
-% waitforkey(32); 
-log.time.start = datestr(now);
+    % Initial textures
+    texNeu = Screen('MakeTexture', w1, trials(1).neuData);
+    texFgt = Screen('MakeTexture', w1, trials(1).fgtData);
+    
+    fprintf('Starting experiment...\n');
+    confirmation_text(sprintf('Start Block %d', b));
+    DrawFormattedText(w1,sprintf('BLOCK %d\n\n', b), 'center', 50, log.config.task.colour.white); 
+    Screen('Flip', w1); outlet.push_sample({sprintf('Block%d_Start', b)});  
 
-totalTic = tic; outlet.push_sample({'Experiment_Start'}); 
-for t = 1:numTrials
-    % Prepare Info String (Trial X | Stance X | Laterality X)
-    % Note: Replace '.stance' with whatever field name is in your 'trials' struct
-    infoStr = sprintf('Trial %d/%d | Stance: %s | Laterality: %s', ...
-        t, numTrials, string(trials(t).stance), string(trials(t).laterality));
-    
-    % --- PHASE 0: OFFLOAD / CONSTANT (2.0s) ---
-    Screen('DrawTexture', w1, texConstant, [], posC);
-    DrawFormattedText(w1, [' \n\n PHASE: CALIBRATION'], 'center', 50, log.config.task.colour.white);
-    
-    onset_offload = Screen('Flip', w1);
-    outlet.push_sample({'Trial_Calibration_S tart'}); % This sends the marker to mBraintrain
-    
-    % % --- PHASE 0.5: PRE-STIMULUS FIXATION (0.25s) ---
-    Screen('DrawLines',  w1, log.config.stim.fix.allCoords, ...
-        log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc, yc]);
-    DrawFormattedText(w1, [infoStr ' \n\n PHASE:  FIXATION'], 'center', 50, log.config.task.colour.white);
-    onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
-    outlet.push_sample({'Trial_Calibration_Done'}); % This sends the marker to mBraintrain
 
-    % --- PHASE 1: NEUTRAL (0.5s) ---
-    Screen('DrawTexture', w1, texNeu, [], posC);
-    DrawFormattedText(w1, [infoStr ' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
-    onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
-%     onset_neu = Screen('Flip', w1);
-    % outlet.push_sample({'Neutral_Onset'}); % This sends the marker to mBraintrain
-    outlet.push_sample({sprintf('T%d_Neu_St%s_Lat%s', t, string(trials(t).stance), trials(t).laterality)});
-  
-    % --- PHASE 2: FIGHT (1.5s) ---
-    Screen('DrawTexture', w1, texFgt, [], posC);
-    DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIGHT'], 'center', 50, log.config.task.colour.white);
-    onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
-    outlet.push_sample({'Fight_Stimulus'}); % This sends the marker to mBraintrain
-
-    waitforkey(32); 
-    % --- ASYNCHRONOUS PREP (Trial T+1) ---
-    if t < numTrials
-        nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
-        nextTexFgt = Screen('MakeTexture', w1, trials(t+1).fgtData);
-    end
-
-    % Wait for Fight Duration with ESC check
-    while GetSecs < onset_fgt + log.config.task.time.fight
-        [~,~,keyCode] = KbCheck;
-        if keyCode(27); terminate = 1; break; end
-    end
-    if terminate; break; end
+    for t = 1:numTrials
+        globalTrialCount = globalTrialCount + 1;
+        % Prepare Info String
+        infoStr = sprintf('Trial %d/%d | Stance: %s | Laterality: %s', ...
+            t, numTrials, string(trials(t).stance), string(trials(t).laterality));
     
-    % --- PHASE 3: ITI / POST-TRIAL FIX ATION ---
-    Screen('DrawLines', w1, log.config.stim.fix.allCoords, ...
-        log.config.stim.fix.lineWidthPix, log.config.task.colour.white, [xc , yc]);
-    DrawFormattedText(w1, [infoStr ' \n\n PHASE: ITI'], 'center', 50, log.config.task.colour.white);
-    fix_iti_onset = Screen('Flip', w1); outlet.push_sample({'Trial_Offset'} ); % This sends the marker to mBraintrain
+        fprintf(sprintf('%s \n', infoStr));
+        % --- PHASE 0: OFFLOAD / CONSTANT (Calibration) ---
+        Screen('TextSize', w1, 400); 
+        DrawFormattedText(w1, 'N', 'center', yc + verticalShift, log.config.task.colour.white);
+        Screen('TextSize', w1, 30); % Reset to standard size for labels
+        
+        onset_offload = Screen('Flip', w1);
+        outlet.push_sample({'Trial_Calibration_Start'}); 
+        
+        % --- PHASE 0.5: PRE-STIMULUS BLANK SPACE ---
+        % Flip and send specific LSL marker for EEG analysis
+        onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
+        outlet.push_sample({'Trial_Calibration_Done'}); 
     
-    % Resource Management
-    Screen('Close', [texNeu, texFgt]);
+        % --- PHASE 1: NEUTRAL ---
+        Screen('DrawTexture', w1, texNeu, [], posC);
+        DrawFormattedText(w1, [infoStr ' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
+        
+        onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
+        outlet.push_sample({sprintf('T%d_Neutral_Stance%s_Lat%s', t, string(trials(t).stance), trials(t).laterality)});
+      
+        % --- PHASE 2: FIGHT ---
+        Screen('DrawTexture', w1, texFgt, [], posC);
+        DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIGHT'], 'center', 50, log.config.task.colour.white);
+        
+        onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
+        outlet.push_sample({'Fight_Stimulus'}); 
+        
+        % --- ASYNCHRONOUS PREP (Trial T+1) ---
+        if t < numTrials
+            nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
+            nextTexFgt = Screen('MakeTexture', w1, trials(t+1).fgtData);
+        end
     
-    if t < numTrials
-        texNeu = nextTexNeu;
-        texFgt = nextTexFgt;
-    end
+        % Wait for Fight Duration with ESC check
+        while GetSecs < onset_fgt + log.config.task.time.fight
+            [~,~,keyCode] = KbCheck;
+            if keyCode(27); terminate = 1; break; end
+        end
+        if terminate; break; end
+        
+        % --- PHASE 3: ITI / POST-TRIAL FIXATION ---
+        fix_iti_onset = Screen('Flip', w1); 
+        outlet.push_sample({'Trial_Offset'}); 
+        
+        % Resource Management: Close textures for current trial
+        Screen('Close', [texNeu, texFgt]);
+        
+        if t < numTrials
+            texNeu = nextTexNeu;
+            texFgt = nextTexFgt;
+        end
+        
+        % ITI wait
+        while GetSecs < fix_iti_onset + log.config.task.time.iti
+            [~,~,keyCode] = KbCheck;
+            if keyCode(27); terminate = 1; break; end
+        end
     
-    % ITI wait
-    while GetSecs < fix_iti_onset + log.config.task.time.iti
-        [~,~,keyCode] = KbCheck;
-        if keyCode(27); terminate = 1; break; end
+        % ----- LOG TO RESULTS TABLE -----
+        results.block(globalTrialCount)      = b;
+        results.trial_id(globalTrialCount)   = t;
+        results.cam(globalTrialCount)        = trials(t).cam;
+        results.posture(globalTrialCount)    = trials(t).posture;
+        results.stance(globalTrialCount)     = trials(t).stance;
+        results.laterality(globalTrialCount) = trials(t).laterality;
+        results.exemplar(globalTrialCount)   = trials(t).exemplar;
+    
+        if terminate; break; end
     end
     if terminate; break; end
 end
+
+%% 7. Cleanup and BIDS Saving
 outlet.push_sample({'Experiment_End'});
-
-
-Screen('Close', texConstant);
-sca;
-% save(log.savePath, 'log');
+Screen('CloseAll'); 
 fprintf('Experiment Complete in %.2f seconds.\n', toc(totalTic));
+
+% --- BIDS SAVING LOGIC ---
+% loc.resulttable (from subject_info) contains the path: 
+% ../results/sub-XXX/ses-XX/beh/sub-XXX_ses-XX_task-name_run-XX
+
+% 1. Save the primary results table as a BIDS-compliant .tsv file
+tsvFilename = [loc.resulttable '_beh.tsv'];
+writetable(results, tsvFilename, 'FileType', 'text', 'Delimiter', '\t');
+
+% 2. Save the MATLAB-specific log structure (includes configs and timestamps)
+matFilename = [loc.resulttable '_beh.mat'];
+save(matFilename, 'log', 'results');
+
+% 3. Save a BIDS Sidecar JSON (Recommended for BIDS compliance)
+% This describes the columns in your TSV
+jsonFilename = [loc.resulttable '_beh.json'];
+jsonStruct = struct(...
+    'block', 'Block number in the session', ...
+    'trial_id', 'Trial number within the block', ...
+    'cam', 'Camera height', ...
+    'posture', 'Fight posture of virtual opponent', ...
+    'stance', 'Height of stance of virtual opponent in cm', ...
+    'laterality', 'Left or right-forward stance of virtual opponent', ...
+    'exemplar', 'Specific stimulus ID');
+
+% Use jsonencode and write to file
+fid = fopen(jsonFilename, 'w');
+if fid ~= -1
+    fprintf(fid, '%s', jsonencode(jsonStruct));
+    fclose(fid);
+end
+
+fprintf('\nData saved to BIDS structure:\nTSV: %s\nMAT: %s\n', tsvFilename, matFilename);
