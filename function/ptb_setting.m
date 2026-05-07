@@ -2,7 +2,9 @@
 function ptb = ptb_setting(log)
     % --- 1. System Setup ---
     PsychDefaultSetup(2);
-    Screen('Preference', 'SkipSyncTests', 1);
+    Screen('Preference', 'ConserveVRAM', 4096); % alternative method for v-sync since DWM cannot be disabled on newer Win systems, if not used PTB will give sync failures 
+    Screen('Preference', 'VBLEndlineOverride', 2160); % PTB can crash if endline isn't set fixed
+    Screen('Preference', 'SkipSyncTests', 0);
     KbName('UnifyKeyNames');
     
     % --- 2. Window Setup ---
@@ -10,7 +12,7 @@ function ptb = ptb_setting(log)
     bgColor = log.config.task.bg; 
     
     s1 = max(Screen('Screens'));
-    
+
     [ptb.w1, ptb.rect1] = Screen('OpenWindow', s1, bgColor); 
     Screen('BlendFunction', ptb.w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); % Enable Alpha Blending for transparency
     % [ptb.w2, ptb.rect2] = Screen('OpenWindow', s2, bgColor);
