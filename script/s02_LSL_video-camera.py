@@ -4,11 +4,8 @@ import os
 import sys
 import uuid
 import multiprocessing
-from pylsl import StreamInfo, StreamOutlet
-import pylsl
+from pylsl import StreamInfo, StreamOutlet, local_clock
 import json
-
-print(pylsl.library_info())
 
 def create_outlet(index, filename):
     stream_name = f'FrameMarker_{index}'
@@ -69,29 +66,13 @@ def record_camera(dev_index, cam_label, save_folder, bids_prefix, task_name, wid
     window_name = f"Preview_{cam_label}"
 
 
-############### ORIGINAL #################
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret: break
-            out.write(frame)
-            outlet.push_sample([float(frame_counter)])
-            cv2.imshow(window_name, frame)
-            frame_counter += 1
-            if cv2.waitKey(1) & 0xFF == ord('q'): break
-    finally:
-        cap.release()
-        out.release()
-        cv2.destroyWindow(window_name)
-
-############### ALTERED #################
+############### ORIGINAL ###############
 #    try:
 #        while True:
 #            ret, frame = cap.read()
 #            if not ret: break
-#            timestamp = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 #            out.write(frame)
-#            outlet.push_sample([float(frame_counter)], timestamp=timestamp)
+#            outlet.push_sample([float(frame_counter)])
 #            cv2.imshow(window_name, frame)
 #            frame_counter += 1
 #            if cv2.waitKey(1) & 0xFF == ord('q'): break
@@ -99,6 +80,22 @@ def record_camera(dev_index, cam_label, save_folder, bids_prefix, task_name, wid
 #        cap.release()
 #        out.release()
 #        cv2.destroyWindow(window_name)
+
+############### ALTERED ###############
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret: break
+            timestamp = local_clock()
+            out.write(frame)
+            outlet.push_sample([float(frame_counter)], timestamp=timestamp)
+            cv2.imshow(window_name, frame)
+            frame_counter += 1
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
+    finally:
+        cap.release()
+        out.release()
+        cv2.destroyWindow(window_name)
 
 if __name__ == "__main__":
     ROOT_DATA_DIR = r"C:\Users\exp-idgrap\Desktop\xplo-judo-data"
