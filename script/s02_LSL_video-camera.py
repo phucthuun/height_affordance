@@ -21,7 +21,7 @@ def record_camera(dev_index, cam_label, save_folder, bids_prefix, task_name, wid
     cap = cv2.VideoCapture(dev_index, cv2.CAP_DSHOW)
     
     # --- ADD THIS LINE HERE ---
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) 
+    # cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) 
     # --------------------------
 
     if not cap.isOpened():
@@ -106,13 +106,14 @@ if __name__ == "__main__":
         if not subj_id: continue
         
         # --- Task Mapping Logic ---
-        print("Task Options: [1] calibration, [2] training, [3] height-affordance, [Or type custom]")
+        print("Task Options: [t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]")
         task_input = input("Task Name/Number: ").strip()
         
         task_map = {
-            "1": "calibration",
-            "2": "training",
-            "3": "height-affordance"
+            "t"     :"training",
+            "h"     : "heightaffordance",
+            "e"     : "estimate",
+            "test"  : "test"
         }
         # Use map if 1/2/3, otherwise use the string they typed
         task_name = task_map.get(task_input, task_input)
