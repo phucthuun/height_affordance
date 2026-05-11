@@ -27,7 +27,7 @@ taskconfig.instruction.welcome = ['Herzlich Willkommen'];
 taskconfig.time.offload                    = 2.00; 
 taskconfig.time.fixation                   = 0.25; 
 taskconfig.time.neutral                    = 0.50; 
-taskconfig.time.fight                      = 1.50;
+taskconfig.time.fight                      = 10.0;
 taskconfig.time.iti                        = 0.5; % interstimulus intervall
 
 
