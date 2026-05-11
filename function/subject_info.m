@@ -1,15 +1,15 @@
-function [ID, filepath] = subject_info(loc)
+function [ID, filepath] = subject_info(loc, defaulttask)
     name = 'BIDS Experimental Setup';
     
     % Define the prompts for the user
     prompt = {...
         'Subject ID (e.g., 001):', ...
-        'Task ([1] calibration, [2] training, [3] height-affordance, or custom):', ...
+        'Task ([t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]):', ...
         'Session ID (default 01):', ...
         'Run Number (default 01):'}; 
     
     % Set default values
-    defaults = {'', '3', '01', '01'};
+    defaults = {'', defaulttask, '01', '01'};
     
     % Open dialog box
     answer = inputdlg(prompt, name, 1, defaults); 
@@ -23,10 +23,11 @@ function [ID, filepath] = subject_info(loc)
     % 2. Parse Task Name
     taskInput = answer{2};
     switch taskInput
-        case '1', taskLabel = 'calibration';
-        case '2', taskLabel = 'training';
-        case '3', taskLabel = 'heightaffordance';
-        otherwise, taskLabel = lower(regexprep(taskInput, '\W', '')); % Clean custom input
+        case 't',       taskLabel = 'training';
+        case 'h',       taskLabel = 'heightaffordance';
+        case 'e',       taskLabel = 'estimate';
+        case 'test',    taskLabel = 'test';
+        otherwise,      taskLabel = lower(regexprep(taskInput, '\W', '')); % Clean custom input
     end
 
     % 3. Extract IDs
