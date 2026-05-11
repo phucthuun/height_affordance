@@ -23,7 +23,8 @@ taskconfig.instruction.welcome = ['Herzlich Willkommen'];
 % --------------------------------------
 % Timing
 % --------------------------------------
-
+taskconfig.numBlocks.training         = 1.00;
+taskconfig.numBlocks.heightaffordance = 4.00;
 taskconfig.time.offload                    = 2.00; 
 taskconfig.time.fixation                   = 0.25; 
 taskconfig.time.neutral                    = 0.50; 
