@@ -8,14 +8,14 @@ log.config.stim = stim_setting();
 
 
 %% List and load stimuli
-mat_file = fullfile(loc.stimuli, 'MASTER_EXPERIMENT_DATA_randomize_3constraints.mat');
+mat_file = fullfile(loc.stimuli.heightaffordance, 'stimuli.mat');
 if exist(mat_file, 'file')
     fprintf('Found existing randomized list. Loading...\n');
     data = load(mat_file, 'masterTrials'); 
     blocks = data.masterTrials;
 else
     fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
-    blocks = stimuli_randomize_preload_4block(loc.stimuli, loc.stimuli);
+    blocks = stimuli_randomize_preload(loc.stimuli.heightaffordance, loc.stimuli.heightaffordance, log.config.task.numBlocks.heightaffordance);
 end
  
 fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
