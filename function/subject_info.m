@@ -4,12 +4,12 @@ function [ID, filepath] = subject_info(loc, defaulttask)
     % Define the prompts for the user
     prompt = {...
         'Subject ID (e.g., 001):', ...
-        'Task ([t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]):', ...
-        'Session ID (default 01):', ...
-        'Run Number (default 01):'}; 
+        'Task ([t] training, [h] height-affordance, [e] estimate):', ...
+        'Session ID (default S001):', ...
+        'Run Number (default 001):'}; 
     
     % Set default values
-    defaults = {'', defaulttask, '01', '01'};
+    defaults = {'', defaulttask, 'S001', '001'};
     
     % Open dialog box
     answer = inputdlg(prompt, name, 1, defaults); 
@@ -26,21 +26,31 @@ function [ID, filepath] = subject_info(loc, defaulttask)
         case 't',       taskLabel = 'training';
         case 'h',       taskLabel = 'heightaffordance';
         case 'e',       taskLabel = 'estimate';
-        case 'test',    taskLabel = 'test';
         otherwise,      taskLabel = lower(regexprep(taskInput, '\W', '')); % Clean custom input
     end
 
-    % 3. Extract IDs
+    % 3. Extract and Format IDs
     subID = answer{1};
-    sesID = answer{3};
-    runID = answer{4};
+    
+    % Logic for Session ID: Ensure it starts with 'S' and is padded (e.g., S001)
+    sesInput = answer{3};
+    if startsWith(sesInput, 'S', 'IgnoreCase', true)
+        numPart = sesInput(2:end); % Strip the 'S'
+        sesID = ['S', sprintf('%03d', str2double(numPart))];
+    else
+        sesID = ['S', sprintf('%03d', str2double(sesInput))];
+    end
+    
+    % Logic for Run ID: Ensure it is 3 digits (e.g., 001)
+    runInput = answer{4};
+    runID = sprintf('%03d', str2double(runInput));
 
     % 4. Construct BIDS filename and path
     % Format: sub-<ID>_ses-<ID>_task-<name>_run-<ID>
     ID = ['sub-' subID];
     filename = sprintf('sub-%s_ses-%s_task-%s_run-%s', subID, sesID, taskLabel, runID);
     
-    % BIDS folder structure: project/sub-001/ses-01/beh/
+    % BIDS folder structure: project/sub-001/ses-S001/beh/
     destFolder = fullfile(loc.result, ID, ['ses-' sesID], 'beh');
     
     % Create folder if it doesn't exist
