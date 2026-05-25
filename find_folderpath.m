@@ -15,7 +15,8 @@ loc.idgrap = string(regexp(loc.highorder, '.*?private', 'match'));
 loc.script = fullfile(loc.root,'script');
 loc.function = fullfile(loc.root,'function');
 loc.stimuli.training = fullfile(loc.root,'stimuli', 'training', 'cam-165','cropped');
-loc.stimuli.heightaffordance = fullfile(loc.root,'stimuli', 'heightaffordance', 'cam-165','cropped');
+loc.stimuli.heightaffordance = fullfile(loc.root,'stimuli', 'heightaffordance', 'cam-165','cropped_OG');
+loc.stimuli.estimate = fullfile(loc.root,'stimuli', 'estimate', 'cam-165','cropped2');
 % Specify path to retrieve and save data 
 loc.result = fullfile('C:\Users\exp-idgrap\Desktop\xplo-judo-data');
 
