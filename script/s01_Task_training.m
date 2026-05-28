@@ -20,14 +20,15 @@ end
  
 fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
 
+
 %% Result table
 % Calculate total trials across all blocks
 numTotalTrials = sum(cellfun(@length, blocks));
 
 % Pre-allocate with fixed size
-results = table('Size', [numTotalTrials, 7], ...
-    'VariableTypes', {'double', 'double', 'double', 'string', 'double', 'string', 'double'}, ...
-    'VariableNames', {'block', 'trial_id', 'cam', 'posture', 'stance', 'laterality', 'exemplar'});
+results = table('Size', [numTotalTrials, 8], ...
+    'VariableTypes', {'double', 'double', 'string', 'double', 'string', 'double', 'string', 'double'}, ...
+    'VariableNames', {'block', 'trial_id', 'fighterID', 'cam', 'posture', 'stance', 'laterality', 'exemplar'});
 
 %% 3. Initialize PTB
 log.config.ptb = ptb_setting(log);
@@ -74,16 +75,18 @@ lib = lsl_loadlib();
 info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
 outlet = lsl_outlet(info);
 
+DrawFormattedText(w1, log.config.task.instruction.training, 'center', 50, log.config.task.colour.white); 
+Screen('Flip', w1);
 confirmation_text('Check for LSL Signal and start EEG Recording.\n');
 
 
 %% 6. Main Presentation Loop
 terminate = 0; globalTrialCount = 0;    
 fprintf('Preparing first trial textures...\n');
-log.time.start = datestr(now); outlet.push_sample({'Experiment_Start'});  
+log.time.start = datestr(now); outlet.push_sample({'ExperimentStart'});  
 totalTic = tic;  
-
-for b = 1:4
+fprintf('Starting experiment...\n');
+for b = 1:log.config.task.numBlocks.training
 
     trials = blocks{b}; numTrials = length(trials);
 
@@ -91,10 +94,10 @@ for b = 1:4
     texNeu = Screen('MakeTexture', w1, trials(1).neuData);
     texFgt = Screen('MakeTexture', w1, trials(1).fgtData);
     
-    fprintf('Starting experiment...\n');
+    
+    DrawFormattedText(w1,sprintf('BLOCK %d\n\n %s', b, log.config.task.instruction.training), 'center', 50, log.config.task.colour.white); 
+    Screen('Flip', w1); outlet.push_sample({sprintf('BlockStart%d', b)});
     confirmation_text(sprintf('Start Block %d', b));
-    DrawFormattedText(w1,sprintf('BLOCK %d\n\n', b), 'center', 50, log.config.task.colour.white); 
-    Screen('Flip', w1); outlet.push_sample({sprintf('Block%d_Start', b)});  
 
 
     for t = 1:numTrials
@@ -105,31 +108,33 @@ for b = 1:4
     
         fprintf(sprintf('%s \n', infoStr));
         % --- PHASE 0: OFFLOAD / CONSTANT (Calibration) ---
-        Screen('TextSize', w1, 400); 
-        DrawFormattedText(w1, 'N', 'center', yc + verticalShift, log.config.task.colour.white);
+        Screen('TextSize', w1, 800); 
+        DrawFormattedText(w1, [' \n\n Back to START POSITION!'], 'center', 50, log.config.task.colour.white);
+        DrawFormattedText(w1, 'N', 'center', yc + 40*verticalShift, log.config.task.colour.white);
         Screen('TextSize', w1, 30); % Reset to standard size for labels
         
         onset_offload = Screen('Flip', w1);
-        outlet.push_sample({'Trial_Calibration_Start'}); 
+        outlet.push_sample({sprintf('TrialOnset%d', t)}); 
         
         % --- PHASE 0.5: PRE-STIMULUS BLANK SPACE ---
         % Flip and send specific LSL marker for EEG analysis
         onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
-        outlet.push_sample({'Trial_Calibration_Done'}); 
+        outlet.push_sample({'NPose'}); 
     
         % --- PHASE 1: NEUTRAL ---
         Screen('DrawTexture', w1, texNeu, [], posC);
-        DrawFormattedText(w1, [infoStr ' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
+        % DrawFormattedText(w1, [' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
         
         onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
-        outlet.push_sample({sprintf('T%d_Neutral_Stance%s_Lat%s', t, string(trials(t).stance), trials(t).laterality)});
-      
+        outlet.push_sample({'Neutral'});
+
         % --- PHASE 2: FIGHT ---
         Screen('DrawTexture', w1, texFgt, [], posC);
-        DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIGHT'], 'center', 50, log.config.task.colour.white);
+        % DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIGHT'], 'center', 50, log.config.task.colour.white);
+        DrawFormattedText(w1, [' \n\n MOVE!'], 'center', 50, log.config.task.colour.white);
         
         onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
-        outlet.push_sample({'Fight_Stimulus'}); 
+        outlet.push_sample({'Fight'}); 
         
         % --- ASYNCHRONOUS PREP (Trial T+1) ---
         if t < numTrials
@@ -146,7 +151,7 @@ for b = 1:4
         
         % --- PHASE 3: ITI / POST-TRIAL FIXATION ---
         fix_iti_onset = Screen('Flip', w1); 
-        outlet.push_sample({'Trial_Offset'}); 
+        outlet.push_sample({sprintf('TrialOffset%d', t)}); 
         
         % Resource Management: Close textures for current trial
         Screen('Close', [texNeu, texFgt]);
@@ -165,6 +170,7 @@ for b = 1:4
         % ----- LOG TO RESULTS TABLE -----
         results.block(globalTrialCount)      = b;
         results.trial_id(globalTrialCount)   = t;
+        results.fighterID(globalTrialCount)    = trials(t).subID;
         results.cam(globalTrialCount)        = trials(t).cam;
         results.posture(globalTrialCount)    = trials(t).posture;
         results.stance(globalTrialCount)     = trials(t).stance;
@@ -174,10 +180,14 @@ for b = 1:4
         if terminate; break; end
     end
     if terminate; break; end
+
+    DrawFormattedText(w1,sprintf('Ending BLOCK %d\n\n Please call the experimenter', b), 'center', 50, log.config.task.colour.white); 
+    Screen('Flip', w1); outlet.push_sample({sprintf('BlockEnd%d', b)});
+    confirmation_text(sprintf('10-min Break'));
 end
 
 %% 7. Cleanup and BIDS Saving
-outlet.push_sample({'Experiment_End'});
+outlet.push_sample({'ExperimentEnd'});
 Screen('CloseAll'); 
 fprintf('Experiment Complete in %.2f seconds.\n', toc(totalTic));
 
@@ -199,6 +209,7 @@ jsonFilename = [loc.resulttable '_beh.json'];
 jsonStruct = struct(...
     'block', 'Block number in the session', ...
     'trial_id', 'Trial number within the block', ...
+    'fighterID', 'Fighter ID', ...
     'cam', 'Camera height', ...
     'posture', 'Fight posture of virtual opponent', ...
     'stance', 'Height of stance of virtual opponent in cm', ...
