@@ -1,38 +1,22 @@
-%% Creating a log file and configuration
+%% =========================================================================
+%%                       MAIN EXPERIMENT RUNNER SCRIPT
+%% =========================================================================
+
+%% ---1 Creating a log file and configuration
 log = struct;
-[log.ID, loc.resulttable] = subject_info(loc, 'h');
+[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
  
 %% Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
 
-%% List and load stimuli
-mat_file = fullfile(loc.stimuli.heightaffordance, 'stimuli.mat');
-if exist(mat_file, 'file')
-    fprintf('Found existing randomized list. Loading...\n');
-    data = load(mat_file, 'masterTrials'); 
-    blocks = data.masterTrials;
-else
-    fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
-    blocks = stimuli_randomize_preload(loc.stimuli.heightaffordance, loc.stimuli.heightaffordance, log.config.task.numBlocks.heightaffordance);
-end
- 
-fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
+%% ---2 List and load stimuli
+blocks = stimuli_randomize_preload(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
-%% Result table
-% Calculate total trials across all blocks
-numTotalTrials = sum(cellfun(@length, blocks));
 
-% Pre-allocate with fixed size
-results = table('Size', [numTotalTrials, 8], ...
-    'VariableTypes', {'double', 'double', 'string', 'double', 'string', 'double', 'string', 'double'}, ...
-    'VariableNames', {'block', 'trial_id', 'fighterID', 'cam', 'posture', 'stance', 'laterality', 'exemplar'});
-
-%% 3. Initialize PTB
+%% --- 3. Initialize Psychtoolbox (PTB-3) ---
 log.config.ptb = ptb_setting(log);
-
-%% 4. Global Positioning (Width-Matched & Bottom Aligned)
 w1  = log.config.ptb.w1;
 sw  = log.config.ptb.sw;
 sh  = log.config.ptb.sh;
@@ -40,184 +24,245 @@ ifi = log.config.ptb.ifi;
 xc  = log.config.ptb.xc;
 yc  = log.config.ptb.yc;
 
-% Define the target physical dimensions
-targetWidth = 400; 
-targetHeight = 225; 
-targetShift = 2;
-
-% Conversion: How many pixels are in 2cm?
-% (sh / 225) gives pixels per cm. Multiply by 2.
+% Positioning Configurations
+targetWidth = 400; targetHeight = 225; targetShift = 2;
 verticalShift = (sh / targetHeight) * targetShift; 
-
-% Scaled height logic (16:9 ratio based on screen width)
-heightRatio = targetHeight / targetWidth; % 0.5625
-
-% % Or use the aspect ratio of the image
-% [imgH, imgW, ~] = size(trials(1).neuData);
-% heightRatio = imgH / imgR;
-
-drawW = sw;             
-drawH = sw * heightRatio; 
-
-% NEW POSITIONING: 
-% Subtract verticalShift from the standard bottom alignment (sh)
-newBottom = sh - verticalShift;
-newTop    = newBottom - drawH;
-
+heightRatio = targetHeight / targetWidth; 
+drawW = sw; drawH = sw * heightRatio; 
+newBottom = sh - verticalShift; newTop = newBottom - drawH;
 posC = [0, newTop, sw, newBottom];
 
-% Enable Alpha Blending (Keep this for transparency support)
-Screen('BlendFunction', w1, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA'); 
-
-%% 5. LSL: Describe the marker stream
+%% --- 4. Lab Streaming Layer (LSL) Synchronization Setup ---
 lib = lsl_loadlib();
 info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
 outlet = lsl_outlet(info);
 
+% Display greeting screen instructions
 DrawFormattedText(w1, log.config.task.instruction.heightaffordance, 'center', 50, log.config.task.colour.white); 
 Screen('Flip', w1);
 confirmation_text('Check for LSL Signal and start EEG Recording.\n');
 
-
-%% 6. Main Presentation Loop
-terminate = 0; globalTrialCount = 0;    
-fprintf('Preparing first trial textures...\n');
-log.time.start = datestr(now); outlet.push_sample({'ExperimentStart'});  
+%% --- 5. Main Presentation Block / Run Loop ---
+KbName('UnifyKeyNames'); % Ensure absolute cross-platform key mapping compatibility
+terminateExperiment = 0; 
+log.time.start = datestr(now); 
+outlet.push_sample({'ExperimentStart'});  
 totalTic = tic;  
-fprintf('Starting experiment...\n');
-for b = 1:log.config.task.numBlocks.heightaffordance
 
-    trials = blocks{b}; numTrials = length(trials);
+% Determine maximum blocks available inside preloaded master array
+maxBlocks = length(blocks);
 
-    % Initial textures
+% Loop sequence starts at the run number entered by the experimenter
+b = startRun; 
+
+while b <= maxBlocks && ~terminateExperiment
+    trials = blocks{b}; 
+    numTrials = length(trials);
+    abortBlock = 0; % Reset the block abortion flag at the start of every block sequence
+    
+    % Allocate results data table specifically for this unique run/block execution
+    results = table('Size', [numTrials, 8], ...
+        'VariableTypes', {'double', 'double', 'string', 'double', 'string', 'double', 'string', 'double'}, ...
+        'VariableNames', {'block', 'trial_id', 'fighterID', 'cam', 'posture', 'stance', 'laterality', 'exemplar'});
+    
+    % Initial active textures generation
     texNeu = Screen('MakeTexture', w1, trials(1).neuData);
     texFgt = Screen('MakeTexture', w1, trials(1).fgtData);
     
+    % Clear lookahead safety pointers
+    nextTexNeu = []; nextTexFgt = [];
     
-    DrawFormattedText(w1,sprintf('BLOCK %d\n\n %s', b, log.config.task.instruction.heightaffordance), 'center', 50, log.config.task.colour.white); 
-    Screen('Flip', w1); outlet.push_sample({sprintf('BlockStart%d', b)});
-    confirmation_text(sprintf('Start Block %d', b));
-
-
+    % Display block initialization screen
+    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.heightaffordance), 'center', 50, log.config.task.colour.white); 
+    Screen('Flip', w1); 
+    outlet.push_sample({sprintf('BlockStart%d', b)});
+    confirmation_text(sprintf('Start Run %d', b));
+    
     for t = 1:numTrials
-        globalTrialCount = globalTrialCount + 1;
-        % Prepare Info String
-        infoStr = sprintf('Trial %d/%d | Stance: %s | Laterality: %s', ...
-            t, numTrials, string(trials(t).stance), string(trials(t).laterality));
-    
-        fprintf(sprintf('%s \n', infoStr));
-        % --- PHASE 0: OFFLOAD / CONSTANT (Calibration) ---
+        % --- Pre-trial passive check for ESC key to invoke the intercept menu ---
+        [~, ~, keyCode] = KbCheck;
+        if keyCode(log.config.ptb.key.esc)
+            intervene = true;
+        else
+            intervene = false;
+        end
+        
+        % --- INTERVENTION BRANCHING ROUTING MENU ---
+        if intervene
+            fprintf('\n[INTERCEPTED] Experimenter hit ESC. Presentation paused.\n');
+            DrawFormattedText(w1, 'Experiment Paused by Operator.\nIntervention Menu open on operator screen.', 'center', 'center', log.config.task.colour.white);
+            Screen('Flip', w1);
+            
+            ShowCursor;
+            interceptChoice = questdlg(...
+                sprintf('Run %d | Trial %d interrupted. What would you like to do?', b, t), ...
+                'Operator Interrupt Menu', ...
+                'Proceed to Next Trial', 'Abort & Go to Next Run', 'Abort & End Experiment', 'Proceed to Next Trial');
+            HideCursor;
+            
+            switch interceptChoice
+                case 'Proceed to Next Trial'
+                    fprintf('[RESUMED] Continuing block presentation sequence.\n');
+                    % Do nothing, script proceeds organically to Phase 0
+                    
+                case 'Abort & Go to Next Run'
+                    abortBlock = 1;
+                    break; % Break out of trial loop immediately
+                    
+                case 'Abort & End Experiment'
+                    abortBlock = 1;
+                    terminateExperiment = 1;
+                    break; % Break out of trial loop immediately
+            end
+        end
+        
+        % --- Standard Trial Presentation Sequence ---
+        infoStr = sprintf('Run %d | Trial %d/%d | Stance: %s', b, t, numTrials, string(trials(t).stance));
+        fprintf('%s \n', infoStr);
+        
+        % PHASE 0: Calibration
         Screen('TextSize', w1, 700); 
         DrawFormattedText(w1, 'N', 'center', yc + 40*verticalShift, log.config.task.colour.white);
-        Screen('TextSize', w1, 30); % Reset to standard size for labels
-        
+        Screen('TextSize', w1, 30); 
         onset_offload = Screen('Flip', w1);
         outlet.push_sample({sprintf('TrialOnset%d', t)}); 
         
-        % --- PHASE 0.5: PRE-STIMULUS BLANK SPACE ---
-        % Flip and send specific LSL marker for EEG analysis
+        % PHASE 0.5: Pre-stimulus blank
         onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
         outlet.push_sample({'NPose'}); 
     
-        % --- PHASE 1: NEUTRAL ---
+        % PHASE 1: Neutral Stimulus Display
         Screen('DrawTexture', w1, texNeu, [], posC);
-        % DrawFormattedText(w1, [infoStr ' \n\n PHASE: NEUTRAL'], 'center', 50, log.config.task.colour.white);
-        
         onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
         outlet.push_sample({'Neutral'});
       
-        % --- PHASE 2: FIGHT ---
+        % PHASE 2: Fight Stimulus Display
         Screen('DrawTexture', w1, texFgt, [], posC);
-        % DrawFormattedText(w1, [infoStr ' \n\n PHASE: FIGHT'], 'center', 50, log.config.task.colour.white);
-        
         onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
         outlet.push_sample({'Fight'}); 
         
-        % --- ASYNCHRONOUS PREP (Trial T+1) ---
+        % Asynchronous parallel texture generation for lookahead tracking
         if t < numTrials
             nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
             nextTexFgt = Screen('MakeTexture', w1, trials(t+1).fgtData);
         end
     
-        % Wait for Fight Duration with ESC check
+        % Wait loop with continuous Esc observation to open menu at trial end
         while GetSecs < onset_fgt + log.config.task.time.fight
             [~,~,keyCode] = KbCheck;
-            if keyCode(27); terminate = 1; break; end
+            if keyCode(log.config.ptb.key.esc); intervene = true; end
         end
-        if terminate; break; end
         
-        % --- PHASE 3: ITI / POST-TRIAL FIXATION ---
+        % PHASE 3: Inter-Trial Interval (ITI)
         fix_iti_onset = Screen('Flip', w1); 
         outlet.push_sample({sprintf('TrialOffset%d', t)}); 
         
-        % Resource Management: Close textures for current trial
+        % Flush graphics memory allocated for the completed trial
         Screen('Close', [texNeu, texFgt]);
         
+        % Swap lookahead pipeline pointers
         if t < numTrials
             texNeu = nextTexNeu;
             texFgt = nextTexFgt;
+            nextTexNeu = []; nextTexFgt = []; 
         end
         
-        % ITI wait
+        % Standard ITI sleep check with escaping fallback tracking
         while GetSecs < fix_iti_onset + log.config.task.time.iti
             [~,~,keyCode] = KbCheck;
-            if keyCode(27); terminate = 1; break; end
+            if keyCode(log.config.ptb.key.esc); intervene = true; end
         end
     
-        % ----- LOG TO RESULTS TABLE -----
-        results.block(globalTrialCount)      = b;
-        results.trial_id(globalTrialCount)   = t;
-        results.fighterID(globalTrialCount)    = trials(t).subID;
-        results.cam(globalTrialCount)        = trials(t).cam;
-        results.posture(globalTrialCount)    = trials(t).posture;
-        results.stance(globalTrialCount)     = trials(t).stance;
-        results.laterality(globalTrialCount) = trials(t).laterality;
-        results.exemplar(globalTrialCount)   = trials(t).exemplar;
+        % Log active runtime properties to table structure
+        results.block(t)      = b;
+        results.trial_id(t)   = t;
+        results.fighterID(t)  = trials(t).subID;
+        results.cam(t)        = trials(t).cam;
+        results.posture(t)    = trials(t).posture;
+        results.stance(t)     = trials(t).stance;
+        results.laterality(t) = trials(t).laterality;
+        results.exemplar(t)   = trials(t).exemplar;
+        
+        % Catch-all breakout check if escape was triggered deep in presentation phases
+        if intervene && t == numTrials
+            % Force evaluation on the final loop iteration if ESC was queued
+            abortBlock = false; 
+        end
+    end % End of Individual Trial Loop
     
-        if terminate; break; end
+    % Memory Safeguard: Purge lookahead allocations safely if early breaking occurred
+    if ~isempty(nextTexNeu); Screen('Close', nextTexNeu); end
+    if ~isempty(nextTexFgt); Screen('Close', nextTexFgt); end
+    Screen('Close', [texNeu, texFgt]);
+
+    %% --- 6. Block Cleanup & BIDS Compliant Data Export ---
+    if abortBlock
+        % Crop missing pre-allocated trial rows before saving partial execution dataset
+        results(t:end, :) = []; 
+        outlet.push_sample({sprintf('BlockAborted%d', b)});
+        fprintf('\n[ABORTED] Run %d cut short by operator at trial %d.\n', b, t);
+    else
+        outlet.push_sample({sprintf('BlockEnd%d', b)});
     end
-    if terminate; break; end
+    
+    % Construct individual run destinations dynamically based on loop variable 'b'
+    currentRunStr = sprintf('%03d', b);
+    filename = sprintf('sub-%s_ses-S%s_task-%s_run-%s', subID, sesID, taskLabel, currentRunStr);
+    destFolder = fullfile(loc.result, ['sub-' subID], ['ses-S' sesID], 'beh');
+    if ~exist(destFolder, 'dir'); mkdir(destFolder); end
+    runFilepath = fullfile(destFolder, filename);
+    
+    % Write incremental results directly to data directory pathing
+    writetable(results, [runFilepath '_beh.tsv'], 'FileType', 'text', 'Delimiter', '\t');
+    save([runFilepath '_beh.mat'], 'log', 'results');
+    
+    % Construct matching BIDS sidecar metadata validation JSON file
+    jsonStruct = struct('block', 'Block/Run sequence number', 'trial_id', 'Trial ID inside run');
+    fid = fopen([runFilepath '_beh.json'], 'w');
+    if fid ~= -1; fprintf(fid, '%s', jsonencode(jsonStruct)); fclose(fid); end
+    fprintf('[SAVED] Run %d tracking saved to: %s\n', b, runFilepath);
+    
+    % Stop further processing loops completely if 'Abort & End Experiment' was selected
+    if terminateExperiment; break; end
+    
+    %% --- 7. NATURAL END-OF-BLOCK ROUTING (Only hit if block finished normally or via 'Next Run') ---
+    ShowCursor;
+    
+    % High-visibility system notification sent to command console window
+    fprintf('\n==================================================\n');
+    fprintf('⚠ CRITICAL REMINDER FOR THE EXPERIMENTER ⚠\n');
+    fprintf('Make sure to manually STOP and SAVE the other data streams\n');
+    fprintf('(Xsens, LabRecorder, loadsol, Neon, camera)\n');
+    fprintf('before initiating the next block!\n');
+    fprintf('==================================================\n\n');
+    
+    % Interactive Dialogue UI warning layout
+    msgString = sprintf(['Run %d Complete.\n\n' ...
+        '⚠ REMINDER: Please STOP and SAVE the other data streams' ...
+        '(Xsens, LabRecorder, loadsol, Neon, camera)\n\n' ...
+        'File name: %s' ...
+        'What would you like to do next?'], b, filename);
+    
+    choice = questdlg(msgString, ...
+        'Experiment Control Menu & Data Sync Reminder', ...
+        'Next Run', 'Save & End Experiment', 'Next Run'); 
+    HideCursor;
+    
+    switch choice
+        case 'Next Run'
+            b = b + 1; 
+            if b <= maxBlocks
+                DrawFormattedText(w1, 'Take a break.\n\nExperimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
+                Screen('Flip', w1);
+            end
+        case 'Save & End Experiment'
+            fprintf('Experiment ended naturally by experimenter request.\n');
+            terminateExperiment = 1;
+    end
+end 
 
-    DrawFormattedText(w1,sprintf('Ending BLOCK %d\n\n Please call the experimenter', b), 'center', 50, log.config.task.colour.white); 
-    Screen('Flip', w1); outlet.push_sample({sprintf('BlockEnd%d', b)});
-    confirmation_text(sprintf('10-min Break'));
-end
-
-%% 7. Cleanup and BIDS Saving
+%% --- 8. Final Session Cleanup & Termination ---
 outlet.push_sample({'ExperimentEnd'});
 Screen('CloseAll'); 
-fprintf('Experiment Complete in %.2f seconds.\n', toc(totalTic));
-
-% --- BIDS SAVING LOGIC ---
-% loc.resulttable (from subject_info) contains the path: 
-% ../results/sub-XXX/ses-XX/beh/sub-XXX_ses-XX_task-name_run-XX
-
-% 1. Save the primary results table as a BIDS-compliant .tsv file
-tsvFilename = [loc.resulttable '_beh.tsv'];
-writetable(results, tsvFilename, 'FileType', 'text', 'Delimiter', '\t');
-
-% 2. Save the MATLAB-specific log structure (includes configs and timestamps)
-matFilename = [loc.resulttable '_beh.mat'];
-save(matFilename, 'log', 'results');
-
-% 3. Save a BIDS Sidecar JSON (Recommended for BIDS compliance)
-% This describes the columns in your TSV
-jsonFilename = [loc.resulttable '_beh.json'];
-jsonStruct = struct(...
-    'block', 'Block number in the session', ...
-    'trial_id', 'Trial number within the block', ...
-    'fighterID', 'Fighter ID', ...
-    'cam', 'Camera height', ...
-    'posture', 'Fight posture of virtual opponent', ...
-    'stance', 'Height of stance of virtual opponent in cm', ...
-    'laterality', 'Left or right-forward stance of virtual opponent', ...
-    'exemplar', 'Specific stimulus ID');
-
-% Use jsonencode and write to file
-fid = fopen(jsonFilename, 'w');
-if fid ~= -1
-    fprintf(fid, '%s', jsonencode(jsonStruct));
-    fclose(fid);
-end
-
-fprintf('\nData saved to BIDS structure:\nTSV: %s\nMAT: %s\n', tsvFilename, matFilename);
+ShowCursor;
+fprintf('\nSession ended safely. Total running time: %.2f seconds.\n', toc(totalTic));
