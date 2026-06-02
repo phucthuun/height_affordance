@@ -120,8 +120,20 @@ if __name__ == "__main__":
         
         if not task_name: continue
         
-        session_id = (input("Session ID [01]: ").strip() or "01").zfill(2)
-        run_id = (input("Run Number [01]: ").strip() or "01").zfill(2)
+       
+        # Default session to S001, default run to 001
+        raw_session = input("Session ID [S001]: ").strip() or "S001"
+        
+        # If the user typed '1', make it 'S001'. If they typed 'S1', make it 'S001'.
+        if not raw_session.startswith("S"):
+            session_id = "S" + raw_session.zfill(3)
+        else:
+            # Splits the 'S' from the number, pads the number, and puts it back
+            num_part = raw_session[1:]
+            session_id = "S" + num_part.zfill(3)
+
+        run_id = (input("Run Number [001]: ").strip() or "001").zfill(3)
+
 
         # BIDS Pathing
         bids_subfolder = os.path.join(ROOT_DATA_DIR, f"sub-{subj_id}", f"ses-{session_id}", "video")
