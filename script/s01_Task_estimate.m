@@ -1,14 +1,13 @@
 %% 1. Creating a log file and configuration
 log = struct; 
-[log.ID, loc.resulttable] = subject_info(loc, 'e');
-
+[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
 %% 2. Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
 %% 3. List and load stimuli
 mat_file = fullfile(loc.stimuli.estimate, 'stimuli.mat');
-
+totalTic = tic;  
 if exist(mat_file, 'file')
     fprintf('Found existing randomized list. Loading...\n');
     data = load(mat_file, 'masterTrials'); 
@@ -29,6 +28,7 @@ numTotalTrials = sum(cellfun(@length, blocks));
 results = table('Size', [numTotalTrials, 8], ...
     'VariableTypes', {'double', 'double', 'double', 'string', 'double', 'string', 'double', 'double'}, ...
     'VariableNames', {'block', 'trial_id', 'cam', 'posture', 'stance', 'laterality', 'exemplar', 'estimate'});
+
 
 %% 5. Initialize PTB & Positioning
 log.config.ptb = ptb_setting(log);
@@ -130,15 +130,17 @@ outlet.push_sample({'Experiment_End'});
 Screen('CloseAll');
 ListenChar(0); % Ensure keyboard is back to normal
 
+runFilepath = filepath_runspecific(loc, subID, sesID, b, taskLabel);
+
 % Save Results (BIDS Format)
-tsvFilename = [loc.resulttable '_beh.tsv'];
+tsvFilename = [runFilepath '_beh.tsv'];
 writetable(results, tsvFilename, 'FileType', 'text', 'Delimiter', '\t');
 
-matFilename = [loc.resulttable '_beh.mat'];
+matFilename = [runFilepath '_beh.mat'];
 save(matFilename, 'log', 'results');
 
 % JSON Sidecar
-jsonFilename = [loc.resulttable '_beh.json'];
+jsonFilename = [runFilepath '_beh.json'];
 jsonStruct = struct(...
     'block', 'Block number', ...
     'trial_id', 'Trial ID', ...
@@ -154,3 +156,33 @@ fprintf(fid, '%s', jsonencode(jsonStruct));
 fclose(fid);
 
 fprintf('\nSuccess! Data saved to results folder.\n');
+
+%% 9. Plot Estimation Accuracy Analysis
+if exist('results', 'var') && ~isempty(results)
+    figure('Name', 'Estimation Accuracy Analysis', 'Color', 'w', 'Position', [100, 100, 600, 550]);
+    hold on;
+    
+    % Plot individual trial points
+    scatter(results.stance, results.estimate, 60, 'filled', ...
+        'MarkerFaceColor', [0.2, 0.4, 0.8], 'MarkerEdgeColor', 'k', 'MarkerFaceAlpha', 0.7);
+
+    % Perfect identity line (Y = X)
+    minVal = min([results.stance; results.estimate]) - 5;
+    maxVal = max([results.stance; results.estimate]) + 5;
+    plot([minVal, maxVal], [minVal, maxVal], 'r--', 'LineWidth', 2);
+
+    % Formatting
+    xlabel('True Stance Height (cm)', 'FontSize', 12);
+    ylabel('Estimated Height (cm)', 'FontSize', 12);
+    title('Estimated vs. True Height', 'FontSize', 14, 'FontWeight', 'bold');
+    grid on;
+    set(gca, 'GridLineStyle', '--', 'GridAlpha', 0.5);
+    xlim([minVal, maxVal]);
+    ylim([minVal, maxVal]);
+    legend({'Trial Estimates', 'Perfect Accuracy (Y=X)'}, 'Location', 'northwest', 'FontSize', 10);
+    axis square;
+    hold off;
+
+else
+    warning('The ''results'' table is empty or does not exist. Cannot generate accuracy plot.');
+end
