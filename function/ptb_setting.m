@@ -29,6 +29,14 @@ function ptb = ptb_setting(log)
     
     % Restrict keys (Space and Esc)
     RestrictKeysForKbCheck([ptb.key.space, ptb.key.esc]);
+
+    % --- 4. Inputs & Visuals ---
+    ptb.key.esc   = KbName('RightArrow');
+    ptb.key.space = KbName('space');
+    ptb.key.pause = KbName('ESCAPE');
+
+    % FIXED: Restrict keys but include Shift keys so the experimenter intervention works!
+    RestrictKeysForKbCheck([ptb.key.space, ptb.key.esc, ptb.key.pause]);
     
     % Use Arial (standard) or a font defined in your log
     Screen('TextFont', ptb.w1, 'Arial');
