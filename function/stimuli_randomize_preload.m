@@ -1,4 +1,13 @@
-function masterTrials = stimuli_randomize_preload(stimDir, saveDir, numBlocks)
+function masterTrials = stimuli_randomize_preload(stimDir, numBlocks)
+    
+mat_file = fullfile(stimDir, 'stimuli.mat');
+if exist(mat_file, 'file')
+    fprintf('Found existing randomized list. Loading...\n');
+    data = load(mat_file, 'masterTrials'); 
+    masterTrials = data.masterTrials;
+else
+    fprintf('No randomized list found. Commencing metadata extraction and loading...\n');
+
     totalTic = tic;
     
     %% --- STEP 1: EXTRACT NAMES & METADATA ---
@@ -108,6 +117,10 @@ function masterTrials = stimuli_randomize_preload(stimDir, saveDir, numBlocks)
 
     %% --- STEP 5: SAVE ---
     fprintf('\nStep 5: Saving all blocks to .mat file...\n');
-    save(fullfile(saveDir, 'stimuli.mat'), 'masterTrials', '-v7.3');
+    save(fullfile(stimDir, 'stimuli.mat'), 'masterTrials', '-v7.3');
     fprintf('Finished! Total time: %.2f seconds.\n', toc(totalTic));
+
+end
+
+
 end
