@@ -7,7 +7,7 @@ log = struct;
 [subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
  
 %% Task setting
-log.config.task = task_setting();  
+log.conig.task = task_setting();  
 log.config.stim = stim_setting();
 
 
@@ -204,13 +204,8 @@ while b <= maxBlocks && ~terminateExperiment
     else
         outlet.push_sample({sprintf('BlockEnd%d', b)});
     end
-    
-    % Construct individual run destinations dynamically based on loop variable 'b'
-    currentRunStr = sprintf('%03d', b);
-    filename = sprintf('sub-%s_ses-S%s_task-%s_run-%s', subID, sesID, taskLabel, currentRunStr);
-    destFolder = fullfile(loc.result, ['sub-' subID], ['ses-S' sesID], 'beh');
-    if ~exist(destFolder, 'dir'); mkdir(destFolder); end
-    runFilepath = fullfile(destFolder, filename);
+
+    runFilepath = filepath_run(loc, subID, sesID, b, taskLabel)
     
     % Write incremental results directly to data directory pathing
     writetable(results, [runFilepath '_beh.tsv'], 'FileType', 'text', 'Delimiter', '\t');
