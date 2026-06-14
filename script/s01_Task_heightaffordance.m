@@ -7,12 +7,12 @@ log = struct;
 [subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
  
 %% Task setting
-log.conig.task = task_setting();  
+log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
 
 %% ---2 List and load stimuli
-blocks = stimuli_randomize_preload(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
+blocks = stimuli_randomize_preload_double(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 
 %% --- 3. Initialize Psychtoolbox (PTB-3) ---
@@ -205,7 +205,7 @@ while b <= maxBlocks && ~terminateExperiment
         outlet.push_sample({sprintf('BlockEnd%d', b)});
     end
 
-    runFilepath = filepath_run(loc, subID, sesID, b, taskLabel)
+    runFilepath = filepath_run(loc, subID, sesID, b, taskLabel);
     
     % Write incremental results directly to data directory pathing
     writetable(results, [runFilepath '_beh.tsv'], 'FileType', 'text', 'Delimiter', '\t');
@@ -235,8 +235,7 @@ while b <= maxBlocks && ~terminateExperiment
     msgString = sprintf(['Run %d Complete.\n\n' ...
         '⚠ REMINDER: Please STOP and SAVE the other data streams' ...
         '(Xsens, LabRecorder, loadsol, Neon, camera)\n\n' ...
-        'File name: %s' ...
-        'What would you like to do next?'], b, filename);
+        'What would you like to do next?'], b);
     
     choice = questdlg(msgString, ...
         'Experiment Control Menu & Data Sync Reminder', ...
