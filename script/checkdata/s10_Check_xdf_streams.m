@@ -1,3 +1,4 @@
+
 %% 1. Select the Two Files Individually
 clear; clc;
 
@@ -16,6 +17,7 @@ fileNames = {file1, file2};
 summary = struct();
 
 %% 2. Extract Metadata and Data Status
+xIdx = find(cellfun(@(x) contains(x.info.name, 'EyeTracker Device_Neon Gaze'), streams), 1);
 for f = 1:2
     fprintf('\nReading structure of File %d...\n', f);
     streams = load_xdf(filePaths{f});

@@ -9,7 +9,7 @@ fullPath = fullfile(path, file);
 streams = load_xdf(fullPath);
 eeglab; 
 
-% --- Robust Stream Identification ---
+% --- Stream Identification ---
 % Dynamically find indices instead of hardcoding 1 and 2
 eegIdx = find(cellfun(@(x) strcmpi(x.info.type, 'EEG'), streams), 1);
 markerIdx = find(cellfun(@(x) contains(x.info.name, 'Trigger', 'IgnoreCase', true), streams), 1);
