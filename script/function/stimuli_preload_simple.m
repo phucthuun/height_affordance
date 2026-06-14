@@ -16,7 +16,7 @@ function masterTrials = stimuli_preload_simple(stimDir, saveDir, numBlocks)
     stimBase = struct('name', {}, 'subID', {}, 'cam', {}, 'scenario', {}, ...
                       'posture', {}, 'stance', {}, 'laterality', {}, 'exemplar', {});
     
-    pattern = 'cropped-mat_sub-([\w\d]+)_cam-(\d+)_scenario-(\w+)_posture-(\w+)_stance-(\d+)_laterality-([\w-]+)_exemplar-(\d+)';
+    pattern = 'face_sub-([\w\d]+)_cam-(\d+)_scenario-(\w+)_posture-(\w+)_stance-(\d+)_laterality-([\w-]+)_exemplar-(\d+)';
     
     validCount = 0;
     for i = 1:nFiles
