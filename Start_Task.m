@@ -8,4 +8,4 @@ totalTic = tic;
 %% Set paths
 loc = find_folderpath();
 taskLabel = task_info();
-run(fullfile(loc.script, sprintf("s01_Task_%s.m", taskLabel)));
+run(fullfile(loc.script,sprintf("s01_Task_%s.m", taskLabel)));
