@@ -1,6 +1,6 @@
 %% 1. Creating a log file and configuration
 log = struct; 
-[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
+[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'e');
 %% 2. Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
@@ -15,7 +15,8 @@ if exist(mat_file, 'file')
 else
     fprintf('No randomized list found. Commencing loading...\n');
     % This calls the simple preloader we created earlier
-    blocks = stimuli_preload_simple(loc.stimuli.estimate, loc.stimuli.estimate, 1);
+    % blocks = stimuli_preload_simple(loc.stimuli.estimate, loc.stimuli.estimate, 1);
+    blocks = stimuli_randomize_preload_estimate(loc.stimuli.estimate, loc.stimuli.estimate, 1);
 end
 
 fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
@@ -130,7 +131,7 @@ outlet.push_sample({'Experiment_End'});
 Screen('CloseAll');
 ListenChar(0); % Ensure keyboard is back to normal
 
-runFilepath = filepath_runspecific(loc, subID, sesID, b, taskLabel);
+runFilepath = filepath_run(loc, subID, sesID, b, taskLabel);
 
 % Save Results (BIDS Format)
 tsvFilename = [runFilepath '_beh.tsv'];
