@@ -1,0 +1,310 @@
+%% Unified BIDS Multi-Modal Synchronization Pipeline (Mocap + Force + EEG + Dual-View Video)
+% Description: Automates extraction, synchronization, and trial-slicing across
+%              Xsens kinematics, Loadsol dynamics, LSL EEG signals, and dual video views.
+clear; clc; close all;
+
+%% 0. BIDS Paths & Multi-Modal Run Selection
+fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
+BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
+DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
+PIPELINE_NAME   = 'syncdata';
+PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
+
+% --- Request Processing Target Metadata via Dialog ---
+prompt = {'Enter Subject ID:', 'Enter Session ID:', 'Enter Run ID:', 'Enter Task Name:', 'Trim buffer before TrialOffset (s):'};
+dlgtitle = 'Data Pipeline Target Selection';
+dims = [1 50];
+definput = {'C4TA1N', 'S001', '001', 'heightaffordance', '3.0'};
+userInput = inputdlg(prompt, dlgtitle, dims, definput);
+if isempty(userInput); error('Execution cancelled by user.'); end
+
+subLabel = regexprep(userInput{1}, '^sub-', '');
+sesLabel = regexprep(userInput{2}, '^ses-', '');
+runID    = sprintf('%03d', str2double(userInput{3}));
+taskName = userInput{4};
+PRE_OFFSET_REDUCTION = str2double(userInput{5});
+
+subID = ['sub-' subLabel]; sesID = ['ses-' sesLabel];
+
+% --- Establish Direct Absolute File Paths ---
+MOCAP_DIR      = fullfile(BASE_LOC, subID, sesID, 'motion');
+FORCE_DIR      = fullfile(BASE_LOC, subID, sesID, 'force');
+VIDEO_DIR      = fullfile(BASE_LOC, subID, sesID, 'video');
+LSL_GLOBAL_DIR = fullfile(BASE_LOC, subID, sesID, 'lslglobal');
+
+% --- Establish Direct Absolute Output Paths ---
+OUTPUT_MOTION_DIR = fullfile(PIPELINE_ROOT, subID, sesID, 'motion');
+OUTPUT_VIDEO_DIR  = fullfile(PIPELINE_ROOT, subID, sesID, 'video');
+
+% Safely generate directories if they do not exist
+if ~exist(OUTPUT_MOTION_DIR, 'dir'), mkdir(OUTPUT_MOTION_DIR); end
+if ~exist(OUTPUT_VIDEO_DIR, 'dir'), mkdir(OUTPUT_VIDEO_DIR); end
+
+search_prefix  = sprintf('%s_%s_task-%s_run-%s', subID, sesID, taskName, runID);
+fullXdfPath    = fullfile(LSL_GLOBAL_DIR, [search_prefix '_lslglobal.xdf']);
+mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
+forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
+
+if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
+if isempty(mvnxDirStruct), error('Missing reprocessed Xsens trajectory file (.mvnx) inside: %s', MOCAP_DIR); end
+if isempty(forceDirStruct), error('Missing Loadsol sensor text log (.txt) inside: %s', FORCE_DIR); end
+
+fullMvnxPath  = fullfile(MOCAP_DIR,  mvnxDirStruct(1).name);
+fullForcePath = fullfile(FORCE_DIR, forceDirStruct(1).name);
+
+% --- Automatically Find Available Video Views ---
+view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*_view-01*.mp4']));
+view2Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*_view-02*.mp4']));
+has_video1 = ~isempty(view1Struct); has_video2 = ~isempty(view2Struct);
+
+%% 1. Ingest & Unpack Data Streams (XDF, MVNX, Loadsol)
+fprintf('Loading master XDF file logs...\n');
+streams = load_xdf(fullXdfPath);
+
+mIdx = find(cellfun(@(x) contains(x.info.name, 'Trigger', 'IgnoreCase', true) || ...
+                        contains(x.info.name, 'Markers', 'IgnoreCase', true), streams), 1);
+                        
+% Dynamic Search for Xsens Kinematic Stream
+allCamMatches = find(cellfun(@(x) contains(x.info.name, 'LinearSegmentKinematicsDatagram'), streams));
+xIdx = [];
+for idx = allCamMatches(:)'
+    if ~isempty(streams{idx}.time_series) && size(streams{idx}.time_series, 2) > 0
+        xIdx = idx; fprintf(' -> Locked onto active Mocap Stream: %s\n', streams{xIdx}.info.name); break;
+    end
+end
+
+% Locate and Unpack Continuous EEG Stream
+eegIdx = find(cellfun(@(x) contains(x.info.type, 'EEG', 'IgnoreCase', true) || ...
+                          contains(x.info.name, 'EEG', 'IgnoreCase', true), streams), 1);
+
+if isempty(mIdx) || isempty(xIdx); error('Required LSL Marker or Xsens Kinematic streams missing.'); end
+
+mText = streams{mIdx}.time_series(:); mTime = streams{mIdx}.time_stamps(:);
+xData_lsl = double(streams{xIdx}.time_series); xTime_lsl = streams{xIdx}.time_stamps;
+fs_lsl = str2double(streams{xIdx}.info.nominal_srate);
+if isnan(fs_lsl) || fs_lsl == 0; fs_lsl = 1 / mean(diff(xTime_lsl)); end
+
+has_eeg = ~isempty(eegIdx);
+if has_eeg
+    fprintf(' -> Parsing active continuous LSL EEG brain metric trace...\n');
+    eegData_raw = double(streams{eegIdx}.time_series); eegTime_raw = streams{eegIdx}.time_stamps(:)';
+    fs_eeg = str2double(streams{eegIdx}.info.nominal_srate);
+    if isnan(fs_eeg) || fs_eeg == 0; fs_eeg = 1 / mean(diff(eegTime_raw)); end
+    numEegChans = size(eegData_raw, 1); eegLabels = cell(numEegChans, 1);
+    try
+        labelsDesc = streams{eegIdx}.info.desc.channels.channel;
+        for c = 1:numEegChans; eegLabels{c} = labelsDesc{c}.label; end
+    catch
+        for c = 1:numEegChans; eegLabels{c} = sprintf('EEG%03d', c); end
+    end
+end
+
+fprintf('Parsing reprocessed MVNX structural frame elements...\n');
+tree = load_mvnx(fullMvnxPath);
+frameRate_mvnx = tree.subject.frameRate; numSegments = double(tree.subject.segmentCount); nSamples_mvnx = length(tree.subject.frames.frame);
+segmentNames = cell(numSegments, 1); for s = 1:numSegments; segmentNames{s} = tree.subject.segments.segment(s).label; end
+mvnx_allPos = zeros(numSegments * 3, nSamples_mvnx);
+for i = 1:nSamples_mvnx
+    if isfield(tree.subject.frames.frame(i), 'position') && ~isempty(tree.subject.frames.frame(i).position)
+        mvnx_allPos(:, i) = tree.subject.frames.frame(i).position(:);
+    end
+end
+
+fprintf('Parsing Loadsol data metrics...\n');
+fid = fopen(fullForcePath, 'r', 'n', 'UTF-8'); allLines = {}; while ~feof(fid); allLines{end+1} = fgetl(fid); end; fclose(fid);
+unitRowIdx = find(cellfun(@(l) ischar(l) && contains(l,'Time[secs]'), allLines), 1);
+label_cells = strsplit(allLines{unitRowIdx - 1}, '\t', 'CollapseDelimiters', false);
+unit_cells  = strsplit(allLines{unitRowIdx}, '\t', 'CollapseDelimiters', false);
+max_cols = max(length(label_cells), length(unit_cells)); combined_headers = cell(1, max_cols);
+for i = 1:max_cols
+    lbl = ''; if i <= length(label_cells); lbl = strtrim(label_cells{i}); end
+    unit = ''; if i <= length(unit_cells); unit = strtrim(unit_cells{i}); end
+    combined_headers{i} = regexprep(sprintf('%s%d%s', unit, i, lbl), '[\[\]\-:]', '_');
+    if isempty(combined_headers{i}), combined_headers{i} = sprintf('Var%d', i); end
+end
+opts = detectImportOptions(fullForcePath, 'FileType', 'text', 'Delimiter', '\t'); opts.DataLines = [unitRowIdx + 1, Inf]; opts.VariableNamingRule = 'modify';
+allDataTab = readtable(fullForcePath, opts); allDataTab.Properties.VariableNames(1:width(allDataTab)) = combined_headers(1:width(allDataTab));
+vars = allDataTab.Properties.VariableNames;
+name_R_tot   = vars{contains(vars, 'KGW304_R') & ~contains(vars, 'lateral') & ~contains(vars, 'medial') & ~contains(vars, 'heel') & contains(vars, 'Force_N')};
+name_L_tot   = vars{contains(vars, 'KGW305_L') & ~contains(vars, 'lateral') & ~contains(vars, 'medial') & ~contains(vars, 'heel') & contains(vars, 'Force_N')};
+name_ttl_sig = vars{contains(vars, 'KYN058') & ~contains(vars, 'area') & contains(vars, 'Force_N')};
+all_time_indices = find(startsWith(vars, 'Time_secs'));
+name_R_time  = vars{all_time_indices(find(all_time_indices < find(strcmp(vars, name_R_tot), 1), 1, 'last'))};
+name_L_time  = vars{all_time_indices(find(all_time_indices < find(strcmp(vars, name_L_tot), 1), 1, 'last'))};
+name_ttl_time= vars{all_time_indices(find(all_time_indices < find(strcmp(vars, name_ttl_sig), 1), 1, 'last'))};
+loadsol.time  = allDataTab.(name_R_time); loadsol.right = allDataTab.(name_R_tot); loadsol.left = allDataTab.(name_L_tot); loadsol.ttl = allDataTab.(name_ttl_sig); loadsol.ttl_t = allDataTab.(name_ttl_time);
+
+%% 2. Chronological Multi-Device Core Cross-Synchronization
+fprintf('Synchronizing timelines across systems...\n');
+if size(xData_lsl, 1) > size(xData_lsl, 2), xData_lsl = xData_lsl.'; end
+lsl_vel  = sqrt(sum(diff(xData_lsl(1:3, :), 1, 2).^2, 1));
+mvnx_vel = sqrt(sum(diff(mvnx_allPos(1:3, :), 1, 2).^2, 1));
+if frameRate_mvnx ~= fs_lsl
+    mvnx_time = (0:length(mvnx_vel)-1) / frameRate_mvnx; mvnx_vel_resampled = resample(mvnx_vel, mvnx_time, fs_lsl);
+else
+    mvnx_vel_resampled = mvnx_vel;
+end
+[correlation, Lags] = xcorr(lsl_vel - mean(lsl_vel), mvnx_vel_resampled - mean(mvnx_vel_resampled));
+[~, maxIdx] = max(correlation); time_lag_seconds = Lags(maxIdx) / fs_lsl;
+mvnx_sync_time = (0:nSamples_mvnx-1)/frameRate_mvnx + (xTime_lsl(1) + time_lag_seconds);
+fprintf(' -> Sync Match: HD MVNX stream trace started %.3f seconds relative to Master LSL.\n', time_lag_seconds);
+
+sigMin = min(loadsol.ttl); sigMax = max(loadsol.ttl); thresh = sigMin + 0.4 * (sigMax - sigMin);
+pulseIdx = find(([0; diff(loadsol.ttl > thresh)] == 1), 1, 'first');
+t0_loadsol = 0; if ~isempty(pulseIdx); t0_loadsol = loadsol.ttl_t(pulseIdx); end
+loadsol_aligned_time = loadsol.time - t0_loadsol;
+
+%% 3. Map Continuous Arrays onto Unified Master Timeline
+totalMasterSamples = length(xTime_lsl);
+master_PosData = zeros(numSegments * 3, totalMasterSamples); master_ForceR = zeros(1, totalMasterSamples); master_ForceL = zeros(1, totalMasterSamples);
+for t = 1:totalMasterSamples
+    [mvnxDiff, closestMvnxIdx] = min(abs(mvnx_sync_time - xTime_lsl(t)));
+    if mvnxDiff > (1 / frameRate_mvnx) * 2; master_PosData(:, t) = NaN; else; master_PosData(:, t) = mvnx_allPos(:, closestMvnxIdx); end
+    relative_mTime = xTime_lsl(t) - (xTime_lsl(1) + time_lag_seconds);
+    [loadsolDiff, closestLsIdx] = min(abs(loadsol_aligned_time - relative_mTime));
+    if loadsolDiff > 0.02; master_ForceR(t) = NaN; master_ForceL(t) = NaN; else; master_ForceR(t) = loadsol.right(closestLsIdx); master_ForceL(t) = loadsol.left(closestLsIdx); end
+end
+
+%% 4. Reconstruct & Segment Trial Timelines
+trials = struct('trial_id', {}, 'start_sample', {}, 'end_sample', {}, 'start_ts', {}, 'end_ts', {});
+trialCount = 0; activeTrialStartTS = [];
+for i = 1:numel(mText)
+    if strcmp(mText{i}, 'NPose')
+        activeTrialStartTS = mTime(i);
+    elseif contains(mText{i}, 'TrialOffset') && ~isempty(activeTrialStartTS)
+        calculatedEndTS = mTime(i) - PRE_OFFSET_REDUCTION;
+        if calculatedEndTS > activeTrialStartTS
+            trialCount = trialCount + 1;
+            [~, s_Sample] = min(abs(xTime_lsl - activeTrialStartTS)); [~, e_Sample] = min(abs(xTime_lsl - calculatedEndTS));
+            if e_Sample > totalMasterSamples; e_Sample = totalMasterSamples; end
+            trials(trialCount).trial_id = trialCount; trials(trialCount).start_sample = s_Sample; trials(trialCount).end_sample = e_Sample;
+            trials(trialCount).start_ts = activeTrialStartTS; trials(trialCount).end_ts = calculatedEndTS;
+        end
+        activeTrialStartTS = [];
+    end
+end
+if trialCount == 0; error('Zero trials matching required marker parameters extracted.'); end
+fprintf('Extracted %d trial segments dynamically windowed.\n', trialCount);
+
+%% 5. Setup Graphic Visualizer Configuration
+idx_match = @(name) find(contains(segmentNames, name, 'IgnoreCase', true), 1);
+boneDefs = {'Pelvis','L5'; 'L5','L3'; 'L3','T12'; 'T12','T8'; 'T8','Neck'; 'Neck','Head'; 'T8','RightShoulder'; 'RightShoulder','RightUpperArm'; 'RightUpperArm','RightForeArm'; 'RightForeArm','RightHand'; 'T8','LeftShoulder'; 'LeftShoulder','LeftUpperArm'; 'LeftUpperArm','LeftForeArm'; 'LeftForeArm','LeftHand'; 'Pelvis','RightUpperLeg'; 'RightUpperLeg','RightLowerLeg'; 'RightLowerLeg','RightFoot'; 'RightFoot','RightToe'; 'Pelvis','LeftUpperLeg'; 'LeftUpperLeg','LeftLowerLeg'; 'LeftLowerLeg','LeftFoot'; 'LeftFoot','LeftToe';};
+bones = zeros(size(boneDefs,1), 2); for b = 1:size(boneDefs,1); bones(b,1) = idx_match(boneDefs{b,1}); bones(b,2) = idx_match(boneDefs{b,2}); end
+nBones = size(bones, 1); headIdx = idx_match('Head'); if isempty(headIdx); headIdx = 6; end
+boneColor = [0.20 0.60 1.00]; rightColor = [1.00 0.35 0.35]; leftColor = [0.35 1.00 0.55];
+maxForceLimit = max([master_ForceR, master_ForceL], [], 'omitnan') * 1.05; if isempty(maxForceLimit) || ~isfinite(maxForceLimit); maxForceLimit = 1000; end
+
+%% 6. Loop and Export Trial Subsections (MAT Payloads & MP4 Visualizers for both Views)
+for t = 1:trialCount
+    sIdx = trials(t).start_sample; eIdx = trials(t).end_sample;
+    trialStartTS = trials(t).start_ts; trialEndTS = trials(t).end_ts;
+    trialDuration = xTime_lsl(eIdx) - xTime_lsl(sIdx);
+    
+    baseOutName = sprintf('%s_%s_task-%s_run-%s_trial-%03d_desc-synchronized', subID, sesID, taskName, runID, trials(t).trial_id);
+    outMatPath  = fullfile(OUTPUT_MOTION_DIR, [baseOutName '_motion.mat']);
+    fprintf(' -> Processing Trial %03d/%03d (Duration: %.2f s)\n', t, trialCount, trialDuration);
+        
+    % --- Step 6a: Identify Intermittent Markers ---
+    trialMarkerMask = (mTime >= trialStartTS) & (mTime <= trialEndTS);
+    trialMarkerTexts = mText(trialMarkerMask); trialMarkerTimes = mTime(trialMarkerMask);
+    for m = 1:numel(trialMarkerTexts)
+        if contains(trialMarkerTexts{m}, 'Fgt', 'IgnoreCase', true); trialMarkerTexts{m} = 'Fight'; end
+        if contains(trialMarkerTexts{m}, 'Neu', 'IgnoreCase', true); trialMarkerTexts{m} = 'Neutral'; end
+    end
+    
+    % --- Step 6b: Slice High-Frequency Continuous EEG Brain Waves ---
+    if has_eeg
+        [~, eegStartIdx] = min(abs(eegTime_raw - trialStartTS)); [~, eegEndIdx] = min(abs(eegTime_raw - trialEndTS));
+        trialEegData = eegData_raw(:, eegStartIdx:eegEndIdx); trialEegTimes = eegTime_raw(eegStartIdx:eegEndIdx) - xTime_lsl(sIdx);
+        currentFsEeg = fs_eeg; currentLabels = eegLabels;
+    else
+        trialEegData = []; trialEegTimes = []; currentFsEeg = 0; currentLabels = {};
+    end
+    
+    % --- Step 6c: Save Unified MAT Payload Matrix ---
+    syncTrialData = struct(...
+        'trial_id', trials(t).trial_id, ...
+        'lsl_master_timestamps', xTime_lsl(sIdx:eIdx), ...
+        'elapsed_trial_time', xTime_lsl(sIdx:eIdx) - xTime_lsl(sIdx), ...
+        'xsens_segment_labels', {segmentNames}, ...
+        'xsens_positions_3D', master_PosData(:, sIdx:eIdx), ...
+        'loadsol_force_N_right', master_ForceR(sIdx:eIdx), ...
+        'loadsol_force_N_left', master_ForceL(sIdx:eIdx), ...
+        'event_marker_strings', {trialMarkerTexts}, ...
+        'event_master_timestamps', trialMarkerTimes, ...
+        'event_relative_timestamps', trialMarkerTimes - xTime_lsl(sIdx), ...
+        'eeg_sampling_rate', currentFsEeg, ...
+        'eeg_channel_labels', {currentLabels}, ...
+        'eeg_voltage_matrix', trialEegData, ...
+        'eeg_relative_timestamps', trialEegTimes ...
+    );
+    save(outMatPath, 'syncTrialData', '-v7.3');
+    
+    % --- Step 6d: Dual Video View Auto-Loop Generation ---
+    viewsToProcess = {}; videoOutPaths = {};
+    if has_video1; viewsToProcess{end+1} = fullfile(VIDEO_DIR, view1Struct(1).name); videoOutPaths{end+1} = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_view-01_diagnostics.mp4']); end
+    if has_video2; viewsToProcess{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoOutPaths{end+1} = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_view-02_diagnostics.mp4']); end
+    
+    for v = 1:numel(viewsToProcess)
+        fig = figure('Color','k', 'Position',[50 50 1600 900], 'Visible','off');
+        
+        % Left Subplot: Animated Kinematics
+        ax3d = subplot(1,2,1,'Parent',fig); set(ax3d,'Color','k','XColor','w','YColor','w','ZColor','w','GridColor',[0.3 0.3 0.3]); hold(ax3d,'on'); grid(ax3d,'on'); view(ax3d, 35, 20); ax3d.DataAspectRatio = [1 1 1];
+        trialPos3D = master_PosData(:, sIdx:eIdx);
+        xlim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); ylim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); zlim(ax3d, [0, max(trialPos3D(:),[],'omitnan')+0.2]);
+        
+        hBones = gobjects(nBones, 1);
+        for b = 1:nBones
+            bname = segmentNames{bones(b,2)};
+            if contains(bname,'Right','IgnoreCase',true); col = rightColor; elseif contains(bname,'Left','IgnoreCase',true); col = leftColor; else; col = boneColor; end
+            hBones(b) = plot3(ax3d, [0 0],[0 0],[0 0], '-o','Color',col,'LineWidth',2.5,'MarkerFaceColor',col);
+        end
+        hHead = plot3(ax3d, 0,0,0, 'o', 'MarkerSize',12,'MarkerFaceColor',[1 0.85 0.6], 'MarkerEdgeColor','w');
+        hTime = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(2)-0.05, ax3d.ZLim(2)-0.05, 't = 0.00 s','Color','w','FontSize',12,'FontWeight','bold');
+        hEventLabel = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(1)+0.2, ax3d.ZLim(2)-0.05, '','Color','r','FontSize',24,'FontWeight','bold');
+        title(ax3d, sprintf('Trial %03d: View %02d Kinematics', trials(t).trial_id, v), 'Color', 'w', 'FontSize', 14);
+        
+        % Right Subplot: Dynamic Forces
+        ax2d = subplot(1,2,2,'Parent',fig); set(ax2d,'Color','k','XColor','w','YColor','w','GridColor',[0.3 0.3 0.3]); hold(ax2d,'on'); grid(ax2d,'on'); ylim(ax2d,[0 maxForceLimit]); xlim(ax2d, [0, 3]);
+        xlabel(ax2d, 'Elapsed Trial Time (s)'); ylabel(ax2d, 'Force (N)');
+        
+        tAxis = syncTrialData.elapsed_trial_time;
+        hFR = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_right, '-', 'Color', rightColor, 'LineWidth', 2.0, 'DisplayName', 'Right Foot');
+        hFL = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_left, '-', 'Color', leftColor,  'LineWidth', 2.0, 'DisplayName', 'Left Foot');
+        hVline = xline(ax2d, 0, '--','Color',[1 1 0.4],'LineWidth',1.5, 'HandleVisibility','off');
+        legend(ax2d, 'show', 'TextColor', 'w', 'Color', 'k', 'Location', 'northeast');
+        
+        vw = VideoWriter(videoOutPaths{v}, 'MPEG-4'); vw.FrameRate = 30; vw.Quality = 90; open(vw);
+        frameStep = max(1, round(fs_lsl / vw.FrameRate)); highlightWindowSamples = round(0.5 * fs_lsl);
+        
+        for s = 1:frameStep:(eIdx - sIdx + 1)
+            if isnan(trialPos3D(1, s)); continue; end
+            globalMasterTimestamp = xTime_lsl(sIdx + s - 1);
+            
+            currentFramePos = reshape(trialPos3D(:, s), 3, numSegments)';
+            for b = 1:nBones
+                p1 = bones(b,1); p2 = bones(b,2);
+                set(hBones(b), 'XData', [currentFramePos(p1,1) currentFramePos(p2,1)], 'YData', [currentFramePos(p1,2) currentFramePos(p2,2)], 'ZData', [currentFramePos(p1,3) currentFramePos(p2,3)]);
+            end
+            set(hHead, 'XData', currentFramePos(headIdx,1), 'YData', currentFramePos(headIdx,2), 'ZData', currentFramePos(headIdx,3));
+            
+            currentTimeVal = tAxis(s);
+            set(hTime, 'String', sprintf('t = %.2f s', currentTimeVal)); hVline.Value = currentTimeVal;
+            
+            % Dynamic Rolling Window Update Rule
+            if currentTimeVal <= 3; xlim(ax2d, [0, 3]); else; xlim(ax2d, [currentTimeVal - 3, currentTimeVal]); end
+            
+            activeMarkerIdx = find((globalMasterTimestamp >= trialMarkerTimes) & (globalMasterTimestamp <= (trialMarkerTimes + (highlightWindowSamples / fs_lsl))), 1);
+            if ~isempty(activeMarkerIdx)
+                set(hEventLabel, 'String', trialMarkerTexts{activeMarkerIdx});
+                for b = 1:nBones; set(hBones(b), 'LineWidth', 3.5); end
+            else
+                set(hEventLabel, 'String', '');
+                for b = 1:nBones; set(hBones(b), 'LineWidth', 2.5); end
+            end
+            drawnow limitrate; writeVideo(vw, getframe(fig));
+        end
+        close(vw); close(fig);
+    end
+end
+fprintf('\n Batch execution finalized. Payloads saved to %s and multi-view diagnostics exported to %s.\n', OUTPUT_MOTION_DIR, OUTPUT_VIDEO_DIR);
