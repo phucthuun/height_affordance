@@ -5,14 +5,14 @@
 %% ---1 Creating a log file and configuration
 log = struct;
 [subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
- 
+
 %% Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
 
 %% ---2 List and load stimuli
-blocks = stimuli_randomize_preload_double(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
+blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 
 %% --- 3. Initialize Psychtoolbox (PTB-3) ---
@@ -46,7 +46,7 @@ confirmation_text('Check for LSL Signal and start EEG Recording.\n');
 KbName('UnifyKeyNames'); % Ensure absolute cross-platform key mapping compatibility
 terminateExperiment = 0; 
 log.time.start = datestr(now); 
-outlet.push_sample({'ExperimentStart'});  
+outlet.push_sample({'ExperimentStart'}); 
 totalTic = tic;  
 
 % Determine maximum blocks available inside preloaded master array
@@ -75,7 +75,7 @@ while b <= maxBlocks && ~terminateExperiment
     % Display block initialization screen
     DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.heightaffordance), 'center', 50, log.config.task.colour.white); 
     Screen('Flip', w1); 
-    outlet.push_sample({sprintf('BlockStart%d', b)});
+    outlet.push_sample({sprintf('BlockStart%d', b)}); 
     confirmation_text(sprintf('Start Run %d', b));
     
     for t = 1:numTrials
@@ -125,21 +125,21 @@ while b <= maxBlocks && ~terminateExperiment
         DrawFormattedText(w1, 'N', 'center', yc + 40*verticalShift, log.config.task.colour.white);
         Screen('TextSize', w1, 30); 
         onset_offload = Screen('Flip', w1);
-        outlet.push_sample({sprintf('TrialOnset%d', t)}); 
+        outlet.push_sample({sprintf('TrialOnset%d', t)});
         
         % PHASE 0.5: Pre-stimulus blank
         onset_preFix = Screen('Flip', w1, onset_offload + log.config.task.time.offload - (ifi/2));
-        outlet.push_sample({'NPose'}); 
+        outlet.push_sample({sprintf('NPose%d', t)});
     
         % PHASE 1: Neutral Stimulus Display
         Screen('DrawTexture', w1, texNeu, [], posC);
         onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
-        outlet.push_sample({'Neutral'});
+        outlet.push_sample({sprintf('Neutral%d', t)}); lsl_send_corrected_neon_event(sprintf('Neutral%d', t));
       
         % PHASE 2: Fight Stimulus Display
         Screen('DrawTexture', w1, texFgt, [], posC);
         onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
-        outlet.push_sample({'Fight'}); 
+        outlet.push_sample({sprintf('Fight%d', t)}); lsl_send_corrected_neon_event(sprintf('Fight%d', t));
         
         % Asynchronous parallel texture generation for lookahead tracking
         if t < numTrials
@@ -199,10 +199,10 @@ while b <= maxBlocks && ~terminateExperiment
     if abortBlock
         % Crop missing pre-allocated trial rows before saving partial execution dataset
         results(t:end, :) = []; 
-        outlet.push_sample({sprintf('BlockAborted%d', b)});
+        outlet.push_sample({sprintf('BlockAborted%d', b)}); 
         fprintf('\n[ABORTED] Run %d cut short by operator at trial %d.\n', b, t);
     else
-        outlet.push_sample({sprintf('BlockEnd%d', b)});
+        outlet.push_sample({sprintf('BlockEnd%d', b)}); 
     end
 
     runFilepath = filepath_run(loc, subID, sesID, b, taskLabel);
