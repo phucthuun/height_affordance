@@ -1,12 +1,8 @@
-%% =========================================================================
-%%                       MAIN EXPERIMENT RUNNER SCRIPT
-%% =========================================================================
-
 %% ---1 Creating a log file and configuration
 log = struct;
 [subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
 
-%% Task setting
+% Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
@@ -56,6 +52,8 @@ maxBlocks = length(blocks);
 b = startRun; 
 
 while b <= maxBlocks && ~terminateExperiment
+
+    % HEIGHT AFFORDANCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     trials = blocks{b}; 
     numTrials = length(trials);
     abortBlock = 0; % Reset the block abortion flag at the start of every block sequence
@@ -134,7 +132,7 @@ while b <= maxBlocks && ~terminateExperiment
         % PHASE 1: Neutral Stimulus Display
         Screen('DrawTexture', w1, texNeu, [], posC);
         onset_neu = Screen('Flip', w1, onset_preFix + log.config.task.time.fixation - (ifi/2));
-        outlet.push_sample({sprintf('Neutral%d', t)}); lsl_send_corrected_neon_event(sprintf('Neutral%d', t));
+        outlet.push_sample({sprintf('Neutral%d', t)});
       
         % PHASE 2: Fight Stimulus Display
         Screen('DrawTexture', w1, texFgt, [], posC);
