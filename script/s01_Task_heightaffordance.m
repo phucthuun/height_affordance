@@ -8,7 +8,7 @@ log.config.stim = stim_setting();
 
 
 %% ---2 List and load stimuli
-blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
+% blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 
 %% --- 3. Initialize Psychtoolbox (PTB-3) ---
@@ -33,11 +33,6 @@ lib = lsl_loadlib();
 info = lsl_streaminfo(lib, 'MATLAB_Trigger', 'Markers', 1, 0, 'cf_string', 'mbt_sync_001');
 outlet = lsl_outlet(info);
 
-% Display greeting screen instructions
-DrawFormattedText(w1, log.config.task.instruction.heightaffordance, 'center', 50, log.config.task.colour.white); 
-Screen('Flip', w1);
-confirmation_text('Technician Checks: ARE ALL STREAMS VISIBLE ON LAB RECORDER');
-
 %% --- 5. Main Presentation Block ---
 KbName('UnifyKeyNames'); % Ensure absolute cross-platform key mapping compatibility
 terminateExperiment = 0; 
@@ -53,18 +48,71 @@ b = startRun;
 
 while b <= maxBlocks && ~terminateExperiment
 
-    %% --- 5a - XSENS AND LOADSOL CALIBRATION
-    experimenter_message('CALIBRATE XSENS AND LOADSOL');
-    experimenter_message('PLUG IN NEON PHONE');
+    experimenter_message(sprintf('RUN %d', b));
+    %% --- 5a - SENSORS PREPARATION
+    experimenter_message('XPLO-Judo App: Input data');
+
+    % Video
+    experimenter_message({'Video', '', ...
+        '1. Run  : Python Script' ...
+        '2  Check: video streams'});
+
+    experimenter_message({'TELL PARTICIPANT THAT WE CAN START THE NEW RUN'});
     
+    % EEG check
+    DrawFormattedText(w1, log.config.task.instruction.check_eeg, 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1);
+    experimenter_message({'EEG', '', ...
+        '1. Gel  : bad channels', ...
+        '2. Check: mbtStreamer STREAMS '});
+
+    % Xsens calibration
+    DrawFormattedText(w1, log.config.task.instruction.check_motion, 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1);
+    experimenter_message({'XSENS', '', ...
+        '1. Measure  : measure participant body and (optional) save config', ...
+        '2. Calibrate: inform participant to N-Pose and Walk', ...
+        '3. Check    : Calibration quality at least ACCEPTABLE'});
+    
+    % Loadsol calibration and recording
+    DrawFormattedText(w1, log.config.task.instruction.check_force, 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1);
+    experimenter_message({'LOADSOL', '', ...
+        '1. Connect: loadapp detects Bluetooth to 2 loadsols and 1 loadsync', ...
+        '2. Zero   : inform participant to lift each foot (=sensor)', ...
+        '3. Start  : loadapp starts recording'});
+
+    % Eye-tracking connection
+    DrawFormattedText(w1, log.config.task.instruction.eyetracking, 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1);
+    experimenter_message({'Eye-Tracking', '', ...
+        '1. Wear  : bring phone back to participant', ...
+        '2. Check : fixation is at the right position'});
+
+    % Recording
+    experimenter_message({'LabRecorder', '', ...
+        '1. Update: CHECK THAT ALL STREAMS ARE VISIBLE', ...
+        '2. Enter : [Task], [Run], [Participant]', ...
+        '3. Start : Lab Recorder starts recording'});
+
+    experimenter_message({'XSENS', '', ...
+        '1. Record: MVN starts recording', ...
+        '2. Check : loadsol has frequently distributed BLACK PINS'});
+
+    experimenter_message({'Eye-Tracking', '', ...
+        '1. Record: Neon Monitor starts recording'});
+
+    experimenter_message({'READY FOR EYE-TRACKING CALIBRATION'});
+
+
     %% --- 5b - EYE TRACKING CALIBRATION
     abortBlock = 0; % Reset the block abortion flag at the start of every block sequence
     calibrationComplete = false;
-    
+        
     while ~calibrationComplete
         try
             fprintf('[NEON CALIBRATION] Starting calibration for Run %d...\n', b);
-            calibration_eyetracking(w1, sw, sh, ifi, log);
+            calibration_eyetracking(w1, sw, sh, ifi, log, PHONE_IP);
             fprintf('[NEON CALIBRATION] Sequence finished.\n');
             
             % Bring up the cursor to interact with the dialog box
@@ -119,7 +167,7 @@ while b <= maxBlocks && ~terminateExperiment
         writetable(results, [filepath_run(loc, subID, sesID, b, taskLabel) '_beh.tsv'], 'FileType', 'text', 'Delimiter', '\t');
         continue; % Skip directly to the natural end-of-block routing logic
     end
-    
+
     %% --- 5c - HEIGHT AFFORDANCE 
     trials = blocks{b}; 
     numTrials = length(trials);
@@ -137,7 +185,7 @@ while b <= maxBlocks && ~terminateExperiment
     nextTexNeu = []; nextTexFgt = [];
     
     % Display block initialization screen
-    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.heightaffordance), 'center', 50, log.config.task.colour.white); 
+    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1); 
     outlet.push_sample({sprintf('BlockStart%d', b)});
 
