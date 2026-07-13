@@ -1,6 +1,6 @@
 %% ---1 Creating a log file and configuration
 log = struct;
-[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'h');
+[subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, 'h');
 
 % Task setting
 log.config.task = task_setting();  
@@ -36,9 +36,9 @@ outlet = lsl_outlet(info);
 % Display greeting screen instructions
 DrawFormattedText(w1, log.config.task.instruction.heightaffordance, 'center', 50, log.config.task.colour.white); 
 Screen('Flip', w1);
-confirmation_text('Check for LSL Signal and start EEG Recording.\n');
+confirmation_text('Technician Checks: ARE ALL STREAMS VISIBLE ON LAB RECORDER');
 
-%% --- 5. Main Presentation Block / Run Loop ---
+%% --- 5. Main Presentation Block ---
 KbName('UnifyKeyNames'); % Ensure absolute cross-platform key mapping compatibility
 terminateExperiment = 0; 
 log.time.start = datestr(now); 
@@ -53,10 +53,76 @@ b = startRun;
 
 while b <= maxBlocks && ~terminateExperiment
 
-    % HEIGHT AFFORDANCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% --- 5a - XSENS AND LOADSOL CALIBRATION
+    experimenter_message('CALIBRATE XSENS AND LOADSOL');
+    experimenter_message('PLUG IN NEON PHONE');
+    
+    %% --- 5b - EYE TRACKING CALIBRATION
+    abortBlock = 0; % Reset the block abortion flag at the start of every block sequence
+    calibrationComplete = false;
+    
+    while ~calibrationComplete
+        try
+            fprintf('[NEON CALIBRATION] Starting calibration for Run %d...\n', b);
+            calibration_eyetracking(w1, sw, sh, ifi, log);
+            fprintf('[NEON CALIBRATION] Sequence finished.\n');
+            
+            % Bring up the cursor to interact with the dialog box
+            ShowCursor;
+            calibChoice = questdlg(...
+                sprintf('Run %d | Eye Tracking Calibration Finished.', b), ...
+                'Calibration Quality Check', ...
+                sprintf('Start Task - RUN %d', b), 'Redo Calibration', 'Continue to Trials');
+            HideCursor;
+            
+            switch calibChoice
+                case sprintf('Start Task - RUN %d', b)
+                    calibrationComplete = true;
+                    fprintf('[NEON CALIBRATION] Confirmed. Proceeding to trials.\n');
+                    
+                case 'Redo Calibration'
+                    fprintf('[NEON CALIBRATION] Restarting calibration...\n');
+                    % Loop continues naturally, rerunning calibration
+            end
+            
+        catch ME
+            if strcmp(ME.identifier, 'EyeTracker:EscapePressed')
+                fprintf('\n[CALIBRATION INTERRUPTED] Operator pressed ESC during calibration.\n');
+                ShowCursor;
+                escChoice = questdlg(...
+                    'Calibration interrupted via ESC. What would you like to do?', ...
+                    'Calibration Interrupt Menu', ...
+                    'Retry Calibration', sprintf('Skip Calibration & Start RUN %d', b), 'Abort Block', 'Retry Calibration');
+                HideCursor;
+                
+                switch escChoice
+                    case 'Retry Calibration'
+                        % Do nothing, let the loop repeat
+                    case sprintf('Skip Calibration & Start RUN %d', b)
+                        calibrationComplete = true; 
+                    case 'Abort Block'
+                        abortBlock = 1;
+                        break; % Break out of the calibration while-loop immediately
+                end
+            else
+                rethrow(ME);
+            end
+        end
+    end
+    
+    % Early exit safety checkpoint if the block was completely aborted during calibration
+    if abortBlock
+        if ~isempty(nextTexNeu); Screen('Close', nextTexNeu); end
+        if ~isempty(nextTexFgt); Screen('Close', nextTexFgt); end
+        Screen('Close', [texNeu, texFgt]);
+        results(t:end, :) = []; 
+        writetable(results, [filepath_run(loc, subID, sesID, b, taskLabel) '_beh.tsv'], 'FileType', 'text', 'Delimiter', '\t');
+        continue; % Skip directly to the natural end-of-block routing logic
+    end
+    
+    %% --- 5c - HEIGHT AFFORDANCE 
     trials = blocks{b}; 
     numTrials = length(trials);
-    abortBlock = 0; % Reset the block abortion flag at the start of every block sequence
     
     % Allocate results data table specifically for this unique run/block execution
     results = table('Size', [numTrials, 8], ...
@@ -73,9 +139,8 @@ while b <= maxBlocks && ~terminateExperiment
     % Display block initialization screen
     DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.heightaffordance), 'center', 50, log.config.task.colour.white); 
     Screen('Flip', w1); 
-    outlet.push_sample({sprintf('BlockStart%d', b)}); 
-    confirmation_text(sprintf('Start Run %d', b));
-    
+    outlet.push_sample({sprintf('BlockStart%d', b)});
+
     for t = 1:numTrials
         % --- Pre-trial passive check for ESC key to invoke the intercept menu ---
         [~, ~, keyCode] = KbCheck;
@@ -137,13 +202,7 @@ while b <= maxBlocks && ~terminateExperiment
         % PHASE 2: Fight Stimulus Display
         Screen('DrawTexture', w1, texFgt, [], posC);
         onset_fgt = Screen('Flip', w1, onset_neu + log.config.task.time.neutral - (ifi/2));
-        outlet.push_sample({sprintf('Fight%d', t)}); lsl_send_corrected_neon_event(sprintf('Fight%d', t));
-        
-        % Asynchronous parallel texture generation for lookahead tracking
-        if t < numTrials
-            nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
-            nextTexFgt = Screen('MakeTexture', w1, trials(t+1).fgtData);
-        end
+        outlet.push_sample({sprintf('Fight%d', t)}); lsl_send_corrected_neon_event(sprintf('Fight%d', t), PHONE_IP);
     
         % Wait loop with continuous Esc observation to open menu at trial end
         while GetSecs < onset_fgt + log.config.task.time.fight
@@ -154,7 +213,12 @@ while b <= maxBlocks && ~terminateExperiment
         % PHASE 3: Inter-Trial Interval (ITI)
         fix_iti_onset = Screen('Flip', w1); 
         outlet.push_sample({sprintf('TrialOffset%d', t)}); 
-        
+                
+        % Asynchronous parallel texture generation for lookahead tracking
+        if t < numTrials
+            nextTexNeu = Screen('MakeTexture', w1, trials(t+1).neuData);
+            nextTexFgt = Screen('MakeTexture', w1, trials(t+1).fgtData);
+        end
         % Flush graphics memory allocated for the completed trial
         Screen('Close', [texNeu, texFgt]);
         
@@ -218,37 +282,53 @@ while b <= maxBlocks && ~terminateExperiment
     % Stop further processing loops completely if 'Abort & End Experiment' was selected
     if terminateExperiment; break; end
     
-    %% --- 7. NATURAL END-OF-BLOCK ROUTING (Only hit if block finished normally or via 'Next Run') ---
-    ShowCursor;
-    
-    % High-visibility system notification sent to command console window
-    fprintf('\n==================================================\n');
-    fprintf('⚠ CRITICAL REMINDER FOR THE EXPERIMENTER ⚠\n');
-    fprintf('Make sure to manually STOP and SAVE the other data streams\n');
-    fprintf('(Xsens, LabRecorder, loadsol, Neon, camera)\n');
-    fprintf('before initiating the next block!\n');
-    fprintf('==================================================\n\n');
-    
-    % Interactive Dialogue UI warning layout
-    msgString = sprintf(['Run %d Complete.\n\n' ...
-        '⚠ REMINDER: Please STOP and SAVE the other data streams' ...
-        '(Xsens, LabRecorder, loadsol, Neon, camera)\n\n' ...
-        'What would you like to do next?'], b);
-    
-    choice = questdlg(msgString, ...
-        'Experiment Control Menu & Data Sync Reminder', ...
-        'Next Run', 'Save & End Experiment', 'Next Run'); 
-    HideCursor;
+    % %% --- 7. NATURAL END-OF-BLOCK ROUTING (Only hit if block finished normally or via 'Next Run') ---
+    % ShowCursor;
+    % 
+    % % High-visibility system notification sent to command console window
+    % fprintf('\n==================================================\n');
+    % fprintf('⚠ CRITICAL REMINDER FOR THE EXPERIMENTER ⚠\n');
+    % fprintf('Make sure to manually STOP and SAVE the other data streams\n');
+    % fprintf('(Xsens, LabRecorder, loadsol, Neon, camera)\n');
+    % fprintf('before initiating the next block!\n');
+    % fprintf('==================================================\n\n');
+    % 
+    % % Interactive Dialogue UI warning layout
+    % msgString = sprintf(['Run %d Complete.\n\n' ...
+    %     '⚠ REMINDER: Please STOP and SAVE the other data streams' ...
+    %     '(Xsens, LabRecorder, loadsol, Neon, camera)\n\n' ...
+    %     'What would you like to do next?'], b);
+    % 
+    % choice = questdlg(msgString, ...
+    %     'Experiment Control Menu & Data Sync Reminder', ...
+    %     'Next Run', 'Save & End Experiment', 'Next Run'); 
+    % HideCursor;
+    % 
+    % switch choice
+    %     case 'Next Run'
+    %         b = b + 1; 
+    %         if b <= maxBlocks
+    %             DrawFormattedText(w1, 'Take a break.\n\nExperimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
+    %             Screen('Flip', w1);
+    %         end
+    %     case 'Save & End Experiment'
+    %         fprintf('Experiment ended by experimenter request.\n');
+    %         terminateExperiment = 1;
+    % end
+
+    %% --- 7. BREAK (60min) after each RUN---
+    % Call the local desktop countdown function UI
+    choice = run_block_break_menu(b, log); 
     
     switch choice
         case 'Next Run'
             b = b + 1; 
             if b <= maxBlocks
-                DrawFormattedText(w1, 'Take a break.\n\nExperimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
+                DrawFormattedText(w1, 'Experimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
                 Screen('Flip', w1);
             end
         case 'Save & End Experiment'
-            fprintf('Experiment ended naturally by experimenter request.\n');
+            fprintf('Experiment ended by experimenter request during break session.\n');
             terminateExperiment = 1;
     end
 end 
