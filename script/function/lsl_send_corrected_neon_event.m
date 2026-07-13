@@ -1,6 +1,6 @@
-function success = lsl_send_corrected_neon_event(eventName)
+function success = lsl_send_corrected_neon_event(eventName, PHONE_IP)
     % --- CONFIGURATION ---
-    PHONE_IP = '192.168.0.163'; % Your Neon phone's local IP
+%     PHONE_IP = '192.168.0.163'; % Your Neon phone's local IP
     PORT     = '8080';          % Default Pupil Companion API port
     
     % FIX 1: Neon uses the singular "/api/event" endpoint for injecting annotations
