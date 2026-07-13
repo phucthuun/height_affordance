@@ -74,6 +74,7 @@ for b = 1:length(blocks)
     numTrials = length(trials);
         
     outlet.push_sample({sprintf('Block%d_Start', b)});
+
     for t = 1:numTrials
         globalTrialCount = globalTrialCount + 1;
         
