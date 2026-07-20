@@ -1,82 +1,82 @@
-% %% Unified BIDS Multi-Modal Synchronization & Slicing Pipeline
-% % Description: Automates extraction, timeline synchronization, and trial-slicing
-% %              across Xsens kinematics, Loadsol dynamics, raw Dual-View videos, 
-% %              and LSL global tracking streams. Exports frame-synchronized 
-% %              BIDS derivatives (.mat, .json, .tsv, and 3 MP4 video clips per trial).
-% % clear; clc; close all;
-% 
-% %% 0. BIDS Paths & Multi-Modal Run Selection
-% fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
-% % BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
-% % DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
-% BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
-% DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
-% PIPELINE_NAME   = 'syncdata';
-% PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
-% 
-% % --- Request Processing Target Metadata via Dialog Box ---
-% prompt = {'Enter Subject ID (e.g., MH9HXJ):', 'Enter Session ID (e.g., S001):', 'Enter Run ID (e.g., 001):', 'Enter Task Name:', 'Trim buffer before TrialOffset (s):'};
-% dlgtitle = 'Data Pipeline Target Selection';
-% dims = [1 50];
-% definput = {'MH9HXJ', 'S001', '001', 'heightaffordance', '3.0'};
-% userInput = inputdlg(prompt, dlgtitle, dims, definput);
-% if isempty(userInput); error('Execution cancelled by user.'); end
-% 
-% subLabel = regexprep(userInput{1}, '^sub-', '');
-% sesLabel = regexprep(userInput{2}, '^ses-', '');
-% runID    = sprintf('%03d', str2double(userInput{3}));
-% taskName = userInput{4};
-% PRE_OFFSET_REDUCTION = str2double(userInput{5});
-% 
-% subID = ['sub-' subLabel]; sesID = ['ses-' sesLabel];
-% 
-% % --- Establish Direct Absolute BIDS Workspace Directories ---
-% MOCAP_DIR      = fullfile(BASE_LOC, subID, sesID, 'motion');
-% FORCE_DIR      = fullfile(BASE_LOC, subID, sesID, 'force');
-% VIDEO_DIR      = fullfile(BASE_LOC, subID, sesID, 'video');
-% LSL_GLOBAL_DIR = fullfile(BASE_LOC, subID, sesID, 'lslglobal');
-% 
-% OUTPUT_MOTION_DIR = fullfile(PIPELINE_ROOT, subID, sesID, 'motion');
-% OUTPUT_VIDEO_DIR  = fullfile(PIPELINE_ROOT, subID, sesID, 'video');
-% 
-% if ~exist(OUTPUT_MOTION_DIR, 'dir'), mkdir(OUTPUT_MOTION_DIR); end
-% if ~exist(OUTPUT_VIDEO_DIR, 'dir'), mkdir(OUTPUT_VIDEO_DIR); end
-% 
-% % --- Identify Multi-Modal File Dependencies ---
-% search_prefix  = sprintf('%s_%s_task-%s_run-%s', subID, sesID, taskName, runID);
-% fullXdfPath    = fullfile(LSL_GLOBAL_DIR, [search_prefix '_lslglobal.xdf']);
-% mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
-% forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
-% 
-% if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
-% if isempty(mvnxDirStruct), error('Missing reprocessed Xsens trajectory file (.mvnx) inside: %s', MOCAP_DIR); end
-% if isempty(forceDirStruct), error('Missing Loadsol sensor text log (.txt) inside: %s', FORCE_DIR); end
-% 
-% fullMvnxPath  = fullfile(MOCAP_DIR,  mvnxDirStruct(1).name);
-% fullForcePath = fullfile(FORCE_DIR, forceDirStruct(1).name);
-% 
-% % --- Automatically Locate Available Video Views ---
-% view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-SideView_beh.avi']));
-% view2Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-UpperView_beh.avi']));
-% has_video1 = ~isempty(view1Struct); has_video2 = ~isempty(view2Struct);
-% 
-% % --- Automatically Generate BIDS Dataset Description ---
-% descJsonPath = fullfile(PIPELINE_ROOT, 'dataset_description.json');
-% if ~exist(descJsonPath, 'file')
-%     descStruct = struct(...
-%         'Name', 'BIDS Video Slicing and Multi-Modal Synchronization Pipeline', ...
-%         'BIDSVersion', '1.11.1', ...
-%         'DatasetType', 'derivative', ...
-%         'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.0.0', ...
-%                         'Description', 'Unifies and slices kinematics, forces, and multi-view video feeds into BIDS structures.')}}, ...
-%         'SourceDatasets', {{struct('Description', 'Local project workspace raw BIDS baseline tracking streams')}} ...
-%     );
-%     fid = fopen(descJsonPath, 'w'); fprintf(fid, '%s', jsonencode(descStruct, 'PrettyPrint', true)); fclose(fid);
-% end
-% 
-% %% 1. Ingest & Unpack Data Streams (XDF, MVNX, Loadsol)
-% fprintf('Loading master XDF file logs...\n');
-% streams = load_xdf(fullXdfPath);
+%% Unified BIDS Multi-Modal Synchronization & Slicing Pipeline
+% Description: Automates extraction, timeline synchronization, and trial-slicing
+%              across Xsens kinematics, Loadsol dynamics, raw Dual-View videos, 
+%              and LSL global tracking streams. Exports frame-synchronized 
+%              BIDS derivatives (.mat, .json, .tsv, and 3 MP4 video clips per trial).
+% clear; clc; close all;
+
+%% 0. BIDS Paths & Multi-Modal Run Selection
+fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
+% BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
+% DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
+BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
+DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
+PIPELINE_NAME   = 'syncdata';
+PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
+
+% --- Request Processing Target Metadata via Dialog Box ---
+prompt = {'Enter Subject ID (e.g., MH9HXJ):', 'Enter Session ID (e.g., S001):', 'Enter Run ID (e.g., 001):', 'Enter Task Name:', 'Trim buffer before TrialOffset (s):'};
+dlgtitle = 'Data Pipeline Target Selection';
+dims = [1 50];
+definput = {'MH9HXJ', 'S001', '001', 'heightaffordance', '3.0'};
+userInput = inputdlg(prompt, dlgtitle, dims, definput);
+if isempty(userInput); error('Execution cancelled by user.'); end
+
+subLabel = regexprep(userInput{1}, '^sub-', '');
+sesLabel = regexprep(userInput{2}, '^ses-', '');
+runID    = sprintf('%03d', str2double(userInput{3}));
+taskName = userInput{4};
+PRE_OFFSET_REDUCTION = str2double(userInput{5});
+
+subID = ['sub-' subLabel]; sesID = ['ses-' sesLabel];
+
+% --- Establish Direct Absolute BIDS Workspace Directories ---
+MOCAP_DIR      = fullfile(BASE_LOC, subID, sesID, 'motion');
+FORCE_DIR      = fullfile(BASE_LOC, subID, sesID, 'force');
+VIDEO_DIR      = fullfile(BASE_LOC, subID, sesID, 'video');
+LSL_GLOBAL_DIR = fullfile(BASE_LOC, subID, sesID, 'lslglobal');
+
+OUTPUT_MOTION_DIR = fullfile(PIPELINE_ROOT, subID, sesID, 'motion');
+OUTPUT_VIDEO_DIR  = fullfile(PIPELINE_ROOT, subID, sesID, 'video');
+
+if ~exist(OUTPUT_MOTION_DIR, 'dir'), mkdir(OUTPUT_MOTION_DIR); end
+if ~exist(OUTPUT_VIDEO_DIR, 'dir'), mkdir(OUTPUT_VIDEO_DIR); end
+
+% --- Identify Multi-Modal File Dependencies ---
+search_prefix  = sprintf('%s_%s_task-%s_run-%s', subID, sesID, taskName, runID);
+fullXdfPath    = fullfile(LSL_GLOBAL_DIR, [search_prefix '_lslglobal.xdf']);
+mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
+forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
+
+if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
+if isempty(mvnxDirStruct), error('Missing reprocessed Xsens trajectory file (.mvnx) inside: %s', MOCAP_DIR); end
+if isempty(forceDirStruct), error('Missing Loadsol sensor text log (.txt) inside: %s', FORCE_DIR); end
+
+fullMvnxPath  = fullfile(MOCAP_DIR,  mvnxDirStruct(1).name);
+fullForcePath = fullfile(FORCE_DIR, forceDirStruct(1).name);
+
+% --- Automatically Locate Available Video Views ---
+view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-SideView_beh.avi']));
+view2Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-UpperView_beh.avi']));
+has_video1 = ~isempty(view1Struct); has_video2 = ~isempty(view2Struct);
+
+% --- Automatically Generate BIDS Dataset Description ---
+descJsonPath = fullfile(PIPELINE_ROOT, 'dataset_description.json');
+if ~exist(descJsonPath, 'file')
+    descStruct = struct(...
+        'Name', 'BIDS Video Slicing and Multi-Modal Synchronization Pipeline', ...
+        'BIDSVersion', '1.11.1', ...
+        'DatasetType', 'derivative', ...
+        'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.0.0', ...
+                        'Description', 'Unifies and slices kinematics, forces, and multi-view video feeds into BIDS structures.')}}, ...
+        'SourceDatasets', {{struct('Description', 'Local project workspace raw BIDS baseline tracking streams')}} ...
+    );
+    fid = fopen(descJsonPath, 'w'); fprintf(fid, '%s', jsonencode(descStruct, 'PrettyPrint', true)); fclose(fid);
+end
+
+%% 1. Ingest & Unpack Data Streams (XDF, MVNX, Loadsol)
+fprintf('Loading master XDF file logs...\n');
+streams = load_xdf(fullXdfPath);
 
 mIdx = find(cellfun(@(x) contains(x.info.name, 'Trigger', 'IgnoreCase', true) || ...
                         contains(x.info.name, 'Markers', 'IgnoreCase', true), streams), 1);
@@ -237,85 +237,94 @@ for t = 1:trialCount
         videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoAcqLabels{end+1} = 'UpperView'; videoFrameMarkerIndices{end+1} = upperCamMarkerIdx;
     end
 
+    % Define the hardware video lag (10 frames)
+    HARDWARE_FRAME_LAG = 10; 
+    
     for v = 1:numel(videoViewsToSlice)
         try
             reader = VideoReader(videoViewsToSlice{v});
             acqLabel = videoAcqLabels{v};
-
+    
             outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.avi']);
             outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.json']);
             outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
-
-            % Resolve frame numbers matching this specific trial window
+    
+            % --- 1. RESOLVE FRAME INDEXES WITH HARDWARE LAG COMPENSATION ---
             if ~isempty(videoFrameMarkerIndices{v})
                 vFrames = streams{videoFrameMarkerIndices{v}}.time_series(:);
                 vTime   = streams{videoFrameMarkerIndices{v}}.time_stamps(:);
-                [~, startFrameLutIdx] = min(abs(vTime - trialStartTS));
-                [~, endFrameLutIdx]   = min(abs(vTime - trialEndTS));
-                startFrame = double(vFrames(startFrameLutIdx));
-                endFrame   = double(vFrames(endFrameLutIdx));
+                
+                % Exact index in LSL stream where Neutral event occurred
+                [~, neutralLutIdx]  = min(abs(vTime - trialStartTS));
+                [~, endFrameLutIdx] = min(abs(vTime - trialEndTS));
+                
+                % Physical Neutral timestamp (t = 0.00s)
+                trialStartLSLTimestamp = vTime(neutralLutIdx);
+                
+                % Add +10 frames so we pull the delayed visual frame corresponding to Neutral
+                startFrame = double(vFrames(neutralLutIdx)) + HARDWARE_FRAME_LAG;
+                endFrame   = double(vFrames(endFrameLutIdx)) + HARDWARE_FRAME_LAG;
             else
-                % Fallback calculation directly utilizing temporal boundaries if FrameMarker is missing
-                startFrame = max(1, round((trialStartTS - xTime_lsl(1)) * reader.FrameRate));
-                endFrame   = min(round((trialEndTS - xTime_lsl(1)) * reader.FrameRate), reader.NumFrames);
-                vFrames    = (1:reader.NumFrames)'; vTime = (0:reader.NumFrames-1)'./reader.FrameRate + xTime_lsl(1);
+                % Fallback if FrameMarker is missing
+                fps = reader.FrameRate;
+                trialStartLSLTimestamp = trialStartTS;
+                startFrame = min(reader.NumFrames, round((trialStartTS - xTime_lsl(1)) * fps) + HARDWARE_FRAME_LAG);
+                endFrame   = min(reader.NumFrames, round((trialEndTS - xTime_lsl(1)) * fps) + HARDWARE_FRAME_LAG);
+                
+                vFrames = (1:reader.NumFrames)'; 
+                vTime   = (0:reader.NumFrames-1)'./fps + xTime_lsl(1);
             end
-
+    
+            % Ensure frame bounds remain within raw video file boundaries
             if startFrame < 1; startFrame = 1; end
             if endFrame > reader.NumFrames; endFrame = reader.NumFrames; end
-
+    
             writer = VideoWriter(outVideoPath, 'MPEG-4'); writer.FrameRate = reader.FrameRate; writer.Quality = 95; open(writer);
             reader.CurrentTime = (startFrame - 1) / reader.FrameRate;
-
-            currentFrameNum = startFrame; totalFramesInTrial = (endFrame - startFrame) + 1;
-            frameLUTData = zeros(totalFramesInTrial, 3); lutRowIdx = 1;
-
-            startLslEntryIdx = find(vFrames == currentFrameNum, 1);
-            if isempty(startLslEntryIdx); [~, startLslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
-            trialStartLSLTimestamp = vTime(startLslEntryIdx);
-
-            % Set a display duration for event text on screen (e.g., show event text for 0.5 seconds)
-            eventDisplayWindow = 0.5; % seconds
-            
+    
+            currentFrameNum = startFrame; 
+            totalFramesInTrial = (endFrame - startFrame) + 1;
+            frameLUTData = zeros(totalFramesInTrial, 3); 
+            lutRowIdx = 1;
+    
+            eventDisplayWindow = 0.5; % Display event text for 0.5s
+    
+            % --- 2. FRAME PROCESSING & TEXT BURNING LOOP ---
             while hasFrame(reader) && (currentFrameNum <= endFrame)
                 imgRaw = readFrame(reader);
-                lslEntryIdx = find(vFrames == currentFrameNum, 1);
-                if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
+                
+                % Map current video frame (N + 10) back to physical LSL time N
+                physicalFrameNum = currentFrameNum - HARDWARE_FRAME_LAG;
+                lslEntryIdx = find(vFrames == physicalFrameNum, 1);
+                if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - physicalFrameNum)); end
             
+                % Compute exact elapsed trial time relative to the Neutral event timestamp
                 globalLslTimestamp = vTime(lslEntryIdx); 
-                elapsedTrialTime = globalLslTimestamp - trialStartLSLTimestamp;
+                elapsedTrialTime   = globalLslTimestamp - trialStartLSLTimestamp;
+                
                 pythonFrameIdx = lutRowIdx - 1;
                 frameLUTData(lutRowIdx, :) = [pythonFrameIdx, globalLslTimestamp, elapsedTrialTime];
             
-                % -------------------------------------------------------------------
-                % 1. Color Correction Pre-processing
-                % -------------------------------------------------------------------
+                % Image Color Correction
                 imgDouble = double(imgRaw) / 255.0;
                 imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
                 imgProcessed = imgProcessed .^ gammaExponent;
                 imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
                 img = uint8(imgProcessed * 255);
             
-                % -------------------------------------------------------------------
-                % 2. Dynamic Event Lookup
-                % -------------------------------------------------------------------
-                % Check if the current frame timestamp falls inside an active event window
+                % Dynamic Event Lookup
                 activeIdx = find((globalLslTimestamp >= trialMarkerTimes) & ...
                                  (globalLslTimestamp <= (trialMarkerTimes + eventDisplayWindow)), 1);
             
-                % -------------------------------------------------------------------
-                % 3. Burn Text onto Video Frame
-                % -------------------------------------------------------------------
-                % Default top-left frame overlay info
+                % Top-Left Overlay: Frame 0 will now strictly show Time: 0.00s
                 lblText = sprintf('Trial: %03d | Frame: %d | Time: %.2fs', ...
                                   trials(t).trial_id, pythonFrameIdx, elapsedTrialTime);
                 img = insertText(img, [15, 15], lblText, 'FontSize', 18, ...
                                  'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
             
-                % If an event trigger occurs at this frame, burn a prominent banner overlay
+                % Top-Center Event Banner
                 if ~isempty(activeIdx)
                     eventStr = sprintf('EVENT: %s', trialMarkerTexts{activeIdx});
-                    % Draws prominent text in red at the top-center of the image matrix
                     img = insertText(img, [round(reader.Width/2 - 150), 50], eventStr, ...
                                      'FontSize', 28, 'TextColor', 'red');
                 end
@@ -326,12 +335,17 @@ for t = 1:trialCount
             end
             close(writer);
             if lutRowIdx <= totalFramesInTrial; frameLUTData(lutRowIdx:end, :) = []; end
-
-            % Save frame level look up table (.tsv) and sidecar json metadata
+    
+            % Save LUT and Sidecar JSON
             lutTable = array2table(frameLUTData, 'VariableNames', {'video_frame', 'raw_lsl_timestamp', 'elapsed_trial_time'});
             writetable(lutTable, outLutPath, 'FileType', 'text', 'Delimiter', '\t');
-
-            sidecar = struct('SpatialReference', 'Native camera frame space pixel matrix arrays (1280x720)', 'RawSourceFile', view1Struct(1).name, 'TrialID', trials(t).trial_id, 'FrameRate', reader.FrameRate, 'TargetAnalysisEngine', 'DeepLabCut Pose Estimation', 'TemporalAlignment', struct('TimeSynchronizedVia', ['LSL FrameMarker_' num2str(contains(acqLabel, 'Side', 'IgnoreCase', true)) ' Stream'], 'LookupTableFile', [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv'], 'StartMarker', 'NPose', 'EndMarker', 'TrialOffset Reduction Buffer window'));
+    
+            sidecar = struct('SpatialReference', 'Native camera frame space pixel matrix arrays (1280x720)', ...
+                             'RawSourceFile', view1Struct(1).name, 'TrialID', trials(t).trial_id, ...
+                             'FrameRate', reader.FrameRate, 'TargetAnalysisEngine', 'DeepLabCut Pose Estimation', ...
+                             'TemporalAlignment', struct('TimeSynchronizedVia', ['LSL FrameMarker_' num2str(contains(acqLabel, 'Side', 'IgnoreCase', true)) ' Stream'], ...
+                             'LookupTableFile', [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv'], ...
+                             'StartMarker', 'NPose', 'EndMarker', 'TrialOffset Reduction Buffer window'));
             fid = fopen(outSidecarPath, 'w'); fprintf(fid, '%s', jsonencode(sidecar, 'PrettyPrint', true)); fclose(fid);
         catch ME
             fprintf('    ! Warning processing video slice [%s]: %s\n', acqLabel, ME.message);
