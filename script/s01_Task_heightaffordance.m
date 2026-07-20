@@ -8,7 +8,7 @@ log.config.stim = stim_setting();
 
 
 %% ---2 List and load stimuli
-% blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
+blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 
 %% --- 3. Initialize Psychtoolbox (PTB-3) ---
