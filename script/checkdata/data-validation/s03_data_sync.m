@@ -1,88 +1,92 @@
-%% Unified BIDS Multi-Modal Synchronization & Slicing Pipeline
-% Description: Automates extraction, timeline synchronization, and trial-slicing
-%              across Xsens kinematics, Loadsol dynamics, raw Dual-View videos, 
-%              and LSL global tracking streams. Exports frame-synchronized 
-%              BIDS derivatives (.mat, .json, .tsv, and 3 MP4 video clips per trial).
-clear; clc; close all;
-
-%% 0. BIDS Paths & Multi-Modal Run Selection
-fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
-BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
-DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
-PIPELINE_NAME   = 'syncdata';
-PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
-
-% --- Request Processing Target Metadata via Dialog Box ---
-prompt = {'Enter Subject ID (e.g., MH9HXJ):', 'Enter Session ID (e.g., S001):', 'Enter Run ID (e.g., 001):', 'Enter Task Name:', 'Trim buffer before TrialOffset (s):'};
-dlgtitle = 'Data Pipeline Target Selection';
-dims = [1 50];
-definput = {'MH9HXJ', 'S001', '001', 'heightaffordance', '3.0'};
-userInput = inputdlg(prompt, dlgtitle, dims, definput);
-if isempty(userInput); error('Execution cancelled by user.'); end
-
-subLabel = regexprep(userInput{1}, '^sub-', '');
-sesLabel = regexprep(userInput{2}, '^ses-', '');
-runID    = sprintf('%03d', str2double(userInput{3}));
-taskName = userInput{4};
-PRE_OFFSET_REDUCTION = str2double(userInput{5});
-
-subID = ['sub-' subLabel]; sesID = ['ses-' sesLabel];
-
-% --- Establish Direct Absolute BIDS Workspace Directories ---
-MOCAP_DIR      = fullfile(BASE_LOC, subID, sesID, 'motion');
-FORCE_DIR      = fullfile(BASE_LOC, subID, sesID, 'force');
-VIDEO_DIR      = fullfile(BASE_LOC, subID, sesID, 'video');
-LSL_GLOBAL_DIR = fullfile(BASE_LOC, subID, sesID, 'lslglobal');
-
-OUTPUT_MOTION_DIR = fullfile(PIPELINE_ROOT, subID, sesID, 'motion');
-OUTPUT_VIDEO_DIR  = fullfile(PIPELINE_ROOT, subID, sesID, 'video');
-
-if ~exist(OUTPUT_MOTION_DIR, 'dir'), mkdir(OUTPUT_MOTION_DIR); end
-if ~exist(OUTPUT_VIDEO_DIR, 'dir'), mkdir(OUTPUT_VIDEO_DIR); end
-
-% --- Identify Multi-Modal File Dependencies ---
-search_prefix  = sprintf('%s_%s_task-%s_run-%s', subID, sesID, taskName, runID);
-fullXdfPath    = fullfile(LSL_GLOBAL_DIR, [search_prefix '_lslglobal.xdf']);
-mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
-forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
-
-if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
-if isempty(mvnxDirStruct), error('Missing reprocessed Xsens trajectory file (.mvnx) inside: %s', MOCAP_DIR); end
-if isempty(forceDirStruct), error('Missing Loadsol sensor text log (.txt) inside: %s', FORCE_DIR); end
-
-fullMvnxPath  = fullfile(MOCAP_DIR,  mvnxDirStruct(1).name);
-fullForcePath = fullfile(FORCE_DIR, forceDirStruct(1).name);
-
-% --- Automatically Locate Available Video Views ---
-view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-SideView_beh.avi']));
-view2Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-UpperView_beh.avi']));
-has_video1 = ~isempty(view1Struct); has_video2 = ~isempty(view2Struct);
-
-% --- Automatically Generate BIDS Dataset Description ---
-descJsonPath = fullfile(PIPELINE_ROOT, 'dataset_description.json');
-if ~exist(descJsonPath, 'file')
-    descStruct = struct(...
-        'Name', 'BIDS Video Slicing and Multi-Modal Synchronization Pipeline', ...
-        'BIDSVersion', '1.11.1', ...
-        'DatasetType', 'derivative', ...
-        'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.0.0', ...
-                        'Description', 'Unifies and slices kinematics, forces, and multi-view video feeds into BIDS structures.')}}, ...
-        'SourceDatasets', {{struct('Description', 'Local project workspace raw BIDS baseline tracking streams')}} ...
-    );
-    fid = fopen(descJsonPath, 'w'); fprintf(fid, '%s', jsonencode(descStruct, 'PrettyPrint', true)); fclose(fid);
-end
-
-%% 1. Ingest & Unpack Data Streams (XDF, MVNX, Loadsol)
-fprintf('Loading master XDF file logs...\n');
-streams = load_xdf(fullXdfPath);
+% %% Unified BIDS Multi-Modal Synchronization & Slicing Pipeline
+% % Description: Automates extraction, timeline synchronization, and trial-slicing
+% %              across Xsens kinematics, Loadsol dynamics, raw Dual-View videos, 
+% %              and LSL global tracking streams. Exports frame-synchronized 
+% %              BIDS derivatives (.mat, .json, .tsv, and 3 MP4 video clips per trial).
+% % clear; clc; close all;
+% 
+% %% 0. BIDS Paths & Multi-Modal Run Selection
+% fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
+% % BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
+% % DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
+% BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
+% DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
+% PIPELINE_NAME   = 'syncdata';
+% PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
+% 
+% % --- Request Processing Target Metadata via Dialog Box ---
+% prompt = {'Enter Subject ID (e.g., MH9HXJ):', 'Enter Session ID (e.g., S001):', 'Enter Run ID (e.g., 001):', 'Enter Task Name:', 'Trim buffer before TrialOffset (s):'};
+% dlgtitle = 'Data Pipeline Target Selection';
+% dims = [1 50];
+% definput = {'MH9HXJ', 'S001', '001', 'heightaffordance', '3.0'};
+% userInput = inputdlg(prompt, dlgtitle, dims, definput);
+% if isempty(userInput); error('Execution cancelled by user.'); end
+% 
+% subLabel = regexprep(userInput{1}, '^sub-', '');
+% sesLabel = regexprep(userInput{2}, '^ses-', '');
+% runID    = sprintf('%03d', str2double(userInput{3}));
+% taskName = userInput{4};
+% PRE_OFFSET_REDUCTION = str2double(userInput{5});
+% 
+% subID = ['sub-' subLabel]; sesID = ['ses-' sesLabel];
+% 
+% % --- Establish Direct Absolute BIDS Workspace Directories ---
+% MOCAP_DIR      = fullfile(BASE_LOC, subID, sesID, 'motion');
+% FORCE_DIR      = fullfile(BASE_LOC, subID, sesID, 'force');
+% VIDEO_DIR      = fullfile(BASE_LOC, subID, sesID, 'video');
+% LSL_GLOBAL_DIR = fullfile(BASE_LOC, subID, sesID, 'lslglobal');
+% 
+% OUTPUT_MOTION_DIR = fullfile(PIPELINE_ROOT, subID, sesID, 'motion');
+% OUTPUT_VIDEO_DIR  = fullfile(PIPELINE_ROOT, subID, sesID, 'video');
+% 
+% if ~exist(OUTPUT_MOTION_DIR, 'dir'), mkdir(OUTPUT_MOTION_DIR); end
+% if ~exist(OUTPUT_VIDEO_DIR, 'dir'), mkdir(OUTPUT_VIDEO_DIR); end
+% 
+% % --- Identify Multi-Modal File Dependencies ---
+% search_prefix  = sprintf('%s_%s_task-%s_run-%s', subID, sesID, taskName, runID);
+% fullXdfPath    = fullfile(LSL_GLOBAL_DIR, [search_prefix '_lslglobal.xdf']);
+% mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
+% forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
+% 
+% if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
+% if isempty(mvnxDirStruct), error('Missing reprocessed Xsens trajectory file (.mvnx) inside: %s', MOCAP_DIR); end
+% if isempty(forceDirStruct), error('Missing Loadsol sensor text log (.txt) inside: %s', FORCE_DIR); end
+% 
+% fullMvnxPath  = fullfile(MOCAP_DIR,  mvnxDirStruct(1).name);
+% fullForcePath = fullfile(FORCE_DIR, forceDirStruct(1).name);
+% 
+% % --- Automatically Locate Available Video Views ---
+% view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-SideView_beh.avi']));
+% view2Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-UpperView_beh.avi']));
+% has_video1 = ~isempty(view1Struct); has_video2 = ~isempty(view2Struct);
+% 
+% % --- Automatically Generate BIDS Dataset Description ---
+% descJsonPath = fullfile(PIPELINE_ROOT, 'dataset_description.json');
+% if ~exist(descJsonPath, 'file')
+%     descStruct = struct(...
+%         'Name', 'BIDS Video Slicing and Multi-Modal Synchronization Pipeline', ...
+%         'BIDSVersion', '1.11.1', ...
+%         'DatasetType', 'derivative', ...
+%         'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.0.0', ...
+%                         'Description', 'Unifies and slices kinematics, forces, and multi-view video feeds into BIDS structures.')}}, ...
+%         'SourceDatasets', {{struct('Description', 'Local project workspace raw BIDS baseline tracking streams')}} ...
+%     );
+%     fid = fopen(descJsonPath, 'w'); fprintf(fid, '%s', jsonencode(descStruct, 'PrettyPrint', true)); fclose(fid);
+% end
+% 
+% %% 1. Ingest & Unpack Data Streams (XDF, MVNX, Loadsol)
+% fprintf('Loading master XDF file logs...\n');
+% streams = load_xdf(fullXdfPath);
 
 mIdx = find(cellfun(@(x) contains(x.info.name, 'Trigger', 'IgnoreCase', true) || ...
                         contains(x.info.name, 'Markers', 'IgnoreCase', true), streams), 1);
-xIdx = find(cellfun(@(x) contains(x.info.name, 'LinearSegmentKinematicsDatagram2'), streams), 1);
+xIdx = find(cellfun(@(x) contains(x.info.name, {'LinearSegmentKinematicsDatagram1', 'LinearSegmentKinematicsDatagram2'}) ...
+    && ~isempty(x.time_series) ...
+    && size(x.time_series, 1) == 207, streams), 1);
 if isempty(mIdx) || isempty(xIdx); error('Required LSL Marker or Xsens Kinematic stream elements missing inside XDF.'); end
 
 mText = streams{mIdx}.time_series(:); mTime = streams{mIdx}.time_stamps(:);
-xData_lsl = double(streams{xIdx}.time_series); xTime_lsl = streams{xIdx}.time_stamps;
+xData_lsl = double(streams{1,xIdx}.time_series); xTime_lsl = streams{1,xIdx}.time_stamps;
 fs_lsl = str2double(streams{xIdx}.info.nominal_srate);
 if isnan(fs_lsl) || fs_lsl == 0; fs_lsl = 1 / mean(diff(xTime_lsl)); end
 
@@ -91,13 +95,13 @@ sideCamMarkerIdx  = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_1'), stre
 upperCamMarkerIdx = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_0'), streams), 1);
 
 fprintf('Parsing reprocessed MVNX structural frame elements...\n');
-tree = load_mvnx(fullMvnxPath);
-frameRate_mvnx = tree.subject.frameRate; numSegments = double(tree.subject.segmentCount); nSamples_mvnx = length(tree.subject.frames.frame);
-segmentNames = cell(numSegments, 1); for s = 1:numSegments; segmentNames{s} = tree.subject.segments.segment(s).label; end
+% tree = load_mvnx(fullMvnxPath);
+frameRate_mvnx = str2num(tree.metaData.subject_frameRate); numSegments = str2num(tree.metaData.subject_segmentCount); nSamples_mvnx = length(tree.frame);
+segmentNames = cell(numSegments, 1); for s = 1:numSegments; segmentNames{s} = tree.segmentData(s).label; end
 mvnx_allPos = zeros(numSegments * 3, nSamples_mvnx);
-for i = 1:nSamples_mvnx
-    if isfield(tree.subject.frames.frame(i), 'position') && ~isempty(tree.subject.frames.frame(i).position)
-        mvnx_allPos(:, i) = tree.subject.frames.frame(i).position(:);
+for i = 1:numSegments
+    if isfield(tree.segmentData(i), 'position') && ~isempty(tree.segmentData(i).position)
+        mvnx_allPos(3*i-2:3*i, :) = tree.segmentData(i).position';
     end
 end
 
@@ -162,7 +166,7 @@ end
 trials = struct('trial_id', {}, 'start_sample', {}, 'end_sample', {}, 'start_ts', {}, 'end_ts', {});
 trialCount = 0; activeTrialStartTS = [];
 for i = 1:numel(mText)
-    if strcmp(mText{i}, 'NPose')
+    if strcmp(mText{i}, sprintf('Neutral%d',trialCount+1))
         activeTrialStartTS = mTime(i);
     elseif contains(mText{i}, 'TrialOffset') && ~isempty(activeTrialStartTS)
         calculatedEndTS = mTime(i) - PRE_OFFSET_REDUCTION;
@@ -222,147 +226,147 @@ for t = 1:trialCount
         'event_master_timestamps', trialMarkerTimes, ...
         'event_relative_timestamps', trialMarkerTimes - xTime_lsl(sIdx) ...
     );
-    save(outMatPath, 'syncTrialData', '-v7.3');
+    % save(outMatPath, 'syncTrialData', '-v7.3');
     
-    % % --- Step 6c: Video 1 & 2 - Process and Crop Raw Camera Views ---
-    % videoViewsToSlice = {}; videoAcqLabels = {}; videoFrameMarkerIndices = {};
-    % if has_video1
-    %     videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view1Struct(1).name); videoAcqLabels{end+1} = 'SideView'; videoFrameMarkerIndices{end+1} = sideCamMarkerIdx;
-    % end
-    % if has_video2
-    %     videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoAcqLabels{end+1} = 'UpperView'; videoFrameMarkerIndices{end+1} = upperCamMarkerIdx;
-    % end
-    % 
-    % for v = 1:numel(videoViewsToSlice)
-    %     try
-    %         reader = VideoReader(videoViewsToSlice{v});
-    %         acqLabel = videoAcqLabels{v};
-    % 
-    %         outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.avi']);
-    %         outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.json']);
-    %         outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
-    % 
-    %         % Resolve frame numbers matching this specific trial window
-    %         if ~isempty(videoFrameMarkerIndices{v})
-    %             vFrames = streams{videoFrameMarkerIndices{v}}.time_series(:);
-    %             vTime   = streams{videoFrameMarkerIndices{v}}.time_stamps(:);
-    %             [~, startFrameLutIdx] = min(abs(vTime - trialStartTS));
-    %             [~, endFrameLutIdx]   = min(abs(vTime - trialEndTS));
-    %             startFrame = double(vFrames(startFrameLutIdx));
-    %             endFrame   = double(vFrames(endFrameLutIdx));
-    %         else
-    %             % Fallback calculation directly utilizing temporal boundaries if FrameMarker is missing
-    %             startFrame = max(1, round((trialStartTS - xTime_lsl(1)) * reader.FrameRate));
-    %             endFrame   = min(round((trialEndTS - xTime_lsl(1)) * reader.FrameRate), reader.NumFrames);
-    %             vFrames    = (1:reader.NumFrames)'; vTime = (0:reader.NumFrames-1)'./reader.FrameRate + xTime_lsl(1);
-    %         end
-    % 
-    %         if startFrame < 1; startFrame = 1; end
-    %         if endFrame > reader.NumFrames; endFrame = reader.NumFrames; end
-    % 
-    %         writer = VideoWriter(outVideoPath, 'MPEG-4'); writer.FrameRate = reader.FrameRate; writer.Quality = 95; open(writer);
-    %         reader.CurrentTime = (startFrame - 1) / reader.FrameRate;
-    % 
-    %         currentFrameNum = startFrame; totalFramesInTrial = (endFrame - startFrame) + 1;
-    %         frameLUTData = zeros(totalFramesInTrial, 3); lutRowIdx = 1;
-    % 
-    %         startLslEntryIdx = find(vFrames == currentFrameNum, 1);
-    %         if isempty(startLslEntryIdx); [~, startLslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
-    %         trialStartLSLTimestamp = vTime(startLslEntryIdx);
-    % 
-    %         while hasFrame(reader) && (currentFrameNum <= endFrame)
-    %             imgRaw = readFrame(reader);
-    %             lslEntryIdx = find(vFrames == currentFrameNum, 1);
-    %             if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
-    % 
-    %             globalLslTimestamp = vTime(lslEntryIdx); elapsedTrialTime = globalLslTimestamp - trialStartLSLTimestamp;
-    %             pythonFrameIdx = lutRowIdx - 1;
-    %             frameLUTData(lutRowIdx, :) = [pythonFrameIdx, globalLslTimestamp, elapsedTrialTime];
-    % 
-    %             % Color correction matrix operations
-    %             imgDouble = double(imgRaw) / 255.0;
-    %             imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
-    %             imgProcessed = imgProcessed .^ gammaExponent;
-    %             imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
-    %             img = uint8(imgProcessed * 255);
-    % 
-    %             lblText = sprintf('Trial: %03d | Frame: %d', trials(t).trial_id, pythonFrameIdx);
-    %             img = insertText(img, [15, 15], lblText, 'FontSize', 18, 'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
-    % 
-    %             writeVideo(writer, img);
-    %             currentFrameNum = currentFrameNum + 1; lutRowIdx = lutRowIdx + 1;
-    %         end
-    %         close(writer);
-    %         if lutRowIdx <= totalFramesInTrial; frameLUTData(lutRowIdx:end, :) = []; end
-    % 
-    %         % Save frame level look up table (.tsv) and sidecar json metadata
-    %         lutTable = array2table(frameLUTData, 'VariableNames', {'video_frame', 'raw_lsl_timestamp', 'elapsed_trial_time'});
-    %         writetable(lutTable, outLutPath, 'FileType', 'text', 'Delimiter', '\t');
-    % 
-    %         sidecar = struct('SpatialReference', 'Native camera frame space pixel matrix arrays (1280x720)', 'RawSourceFile', view1Struct(1).name, 'TrialID', trials(t).trial_id, 'FrameRate', reader.FrameRate, 'TargetAnalysisEngine', 'DeepLabCut Pose Estimation', 'TemporalAlignment', struct('TimeSynchronizedVia', ['LSL FrameMarker_' num2str(contains(acqLabel, 'Side', 'IgnoreCase', true)) ' Stream'], 'LookupTableFile', [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv'], 'StartMarker', 'NPose', 'EndMarker', 'TrialOffset Reduction Buffer window'));
-    %         fid = fopen(outSidecarPath, 'w'); fprintf(fid, '%s', jsonencode(sidecar, 'PrettyPrint', true)); fclose(fid);
-    %     catch ME
-    %         fprintf('    ! Warning processing video slice [%s]: %s\n', acqLabel, ME.message);
-    %     end
-    % end
-    % 
-    % % --- Step 6d: Video 3 - Analytical Multi-Modal Sync Plot ---
-    % plotOutPath = fullfile(OUTPUT_MOTION_DIR, [baseOutName '_desc-motion-force.mp4']);
-    % fig = figure('Color','k', 'Position',[50 50 1600 900], 'Visible','off');
-    % 
-    % ax3d = subplot(1,2,1,'Parent',fig); set(ax3d,'Color','k','XColor','w','YColor','w','ZColor','w','GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax3d,'on'); grid(ax3d,'on'); view(ax3d, 35, 20); ax3d.DataAspectRatio = [1 1 1];
-    % trialPos3D = master_PosData(:, sIdx:eIdx);
-    % xlim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); ylim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); zlim(ax3d, [0, max(trialPos3D(:),[],'omitnan')+0.2]);
-    % 
-    % hBones = gobjects(nBones, 1);
-    % for b = 1:nBones
-    %     bname = segmentNames{bones(b,2)};
-    %     if contains(bname,'Right','IgnoreCase',true); col = rightColor; elseif contains(bname,'Left','IgnoreCase',true); col = leftColor; else; col = boneColor; end
-    %     hBones(b) = plot3(ax3d, [0 0],[0 0],[0 0], '-o','Color',col,'LineWidth',2.5,'MarkerFaceColor',col);
-    % end
-    % hHead = plot3(ax3d, 0,0,0, 'o', 'MarkerSize',12,'MarkerFaceColor',[1 0.85 0.6], 'MarkerEdgeColor','w');
-    % hTime = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(2)-0.05, ax3d.ZLim(2)-0.05, 't = 0.00 s','Color','w','FontSize',12,'FontWeight','bold');
-    % hEventLabel = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(1)+0.2, ax3d.ZLim(2)-0.05, '','Color','r','FontSize',24,'FontWeight','bold','HorizontalAlignment','left');
-    % title(ax3d, sprintf('Trial %03d: 3D Segment Kinematics', trials(t).trial_id), 'Color', 'w', 'FontSize', 14);
-    % 
-    % ax2d = subplot(1,2,2,'Parent',fig); set(ax2d,'Color','k','XColor','w','YColor','w', 'GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax2d,'on'); grid(ax2d,'on'); ylim(ax2d,[0 maxForceLimit]); xlim(ax2d, [0, 3]);
-    % xlabel(ax2d, 'Elapsed Trial Time (s)'); ylabel(ax2d, 'Force (N)'); title(ax2d, 'Loadsol Dynamic Force Distribution', 'Color', 'w', 'FontSize', 14);
-    % 
-    % tAxis = syncTrialData.elapsed_trial_time;
-    % hFR = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_right, '-', 'Color', rightColor, 'LineWidth', 2.0, 'DisplayName', 'Right Foot');
-    % hFL = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_left, '-', 'Color', leftColor,  'LineWidth', 2.0, 'DisplayName', 'Left Foot');
-    % hVline = xline(ax2d, 0, '--','Color',[1 1 0.4],'LineWidth',1.5, 'HandleVisibility','off');
-    % legend(ax2d, 'show', 'TextColor', 'w', 'Color', 'k', 'Location', 'northeast');
-    % 
-    % vw_plot = VideoWriter(plotOutPath, 'MPEG-4'); vw_plot.FrameRate = 30; vw_plot.Quality = 90; open(vw_plot);
-    % frameStep = max(1, round(fs_lsl / vw_plot.FrameRate)); highlightWindowSamples = round(0.5 * fs_lsl);
-    % 
-    % for s = 1:frameStep:(eIdx - sIdx + 1)
-    %     if isnan(trialPos3D(1, s)); continue; end
-    %     globalMasterTimestamp = xTime_lsl(sIdx + s - 1);
-    % 
-    %     currentFramePos = reshape(trialPos3D(:, s), 3, numSegments)';
-    %     for b = 1:nBones
-    %         p1 = bones(b,1); p2 = bones(b,2);
-    %         set(hBones(b), 'XData', [currentFramePos(p1,1) currentFramePos(p2,1)], 'YData', [currentFramePos(p1,2) currentFramePos(p2,2)], 'ZData', [currentFramePos(p1,3) currentFramePos(p2,3)]);
-    %     end
-    %     set(hHead, 'XData', currentFramePos(headIdx,1), 'YData', currentFramePos(headIdx,2), 'ZData', currentFramePos(headIdx,3));
-    % 
-    %     currentTimeVal = tAxis(s);
-    %     set(hTime, 'String', sprintf('t = %.2f s', currentTimeVal)); hVline.Value = currentTimeVal;
-    % 
-    %     if currentTimeVal <= 3; xlim(ax2d, [0, 3]); else; xlim(ax2d, [currentTimeVal - 3, currentTimeVal]); end
-    % 
-    %     activeMarkerIdx = find((globalMasterTimestamp >= trialMarkerTimes) & (globalMasterTimestamp <= (trialMarkerTimes + (highlightWindowSamples / fs_lsl))), 1);
-    %     if ~isempty(activeMarkerIdx)
-    %         set(hEventLabel, 'String', trialMarkerTexts{activeMarkerIdx});
-    %         for b = 1:nBones; set(hBones(b), 'LineWidth', 3.5); end
-    %     else
-    %         set(hEventLabel, 'String', '');
-    %         for b = 1:nBones; set(hBones(b), 'LineWidth', 2.5); end
-    %     end
-    %     drawnow limitrate; writeVideo(vw_plot, getframe(fig));
-    % end
-    % close(vw_plot); close(fig);
+    % --- Step 6c: Video 1 & 2 - Process and Crop Raw Camera Views ---
+    videoViewsToSlice = {}; videoAcqLabels = {}; videoFrameMarkerIndices = {};
+    if has_video1
+        videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view1Struct(1).name); videoAcqLabels{end+1} = 'SideView'; videoFrameMarkerIndices{end+1} = sideCamMarkerIdx;
+    end
+    if has_video2
+        videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoAcqLabels{end+1} = 'UpperView'; videoFrameMarkerIndices{end+1} = upperCamMarkerIdx;
+    end
+
+    for v = 1:numel(videoViewsToSlice)
+        try
+            reader = VideoReader(videoViewsToSlice{v});
+            acqLabel = videoAcqLabels{v};
+
+            outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.avi']);
+            outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.json']);
+            outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
+
+            % Resolve frame numbers matching this specific trial window
+            if ~isempty(videoFrameMarkerIndices{v})
+                vFrames = streams{videoFrameMarkerIndices{v}}.time_series(:);
+                vTime   = streams{videoFrameMarkerIndices{v}}.time_stamps(:);
+                [~, startFrameLutIdx] = min(abs(vTime - trialStartTS));
+                [~, endFrameLutIdx]   = min(abs(vTime - trialEndTS));
+                startFrame = double(vFrames(startFrameLutIdx));
+                endFrame   = double(vFrames(endFrameLutIdx));
+            else
+                % Fallback calculation directly utilizing temporal boundaries if FrameMarker is missing
+                startFrame = max(1, round((trialStartTS - xTime_lsl(1)) * reader.FrameRate));
+                endFrame   = min(round((trialEndTS - xTime_lsl(1)) * reader.FrameRate), reader.NumFrames);
+                vFrames    = (1:reader.NumFrames)'; vTime = (0:reader.NumFrames-1)'./reader.FrameRate + xTime_lsl(1);
+            end
+
+            if startFrame < 1; startFrame = 1; end
+            if endFrame > reader.NumFrames; endFrame = reader.NumFrames; end
+
+            writer = VideoWriter(outVideoPath, 'MPEG-4'); writer.FrameRate = reader.FrameRate; writer.Quality = 95; open(writer);
+            reader.CurrentTime = (startFrame - 1) / reader.FrameRate;
+
+            currentFrameNum = startFrame; totalFramesInTrial = (endFrame - startFrame) + 1;
+            frameLUTData = zeros(totalFramesInTrial, 3); lutRowIdx = 1;
+
+            startLslEntryIdx = find(vFrames == currentFrameNum, 1);
+            if isempty(startLslEntryIdx); [~, startLslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
+            trialStartLSLTimestamp = vTime(startLslEntryIdx);
+
+            while hasFrame(reader) && (currentFrameNum <= endFrame)
+                imgRaw = readFrame(reader);
+                lslEntryIdx = find(vFrames == currentFrameNum, 1);
+                if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
+
+                globalLslTimestamp = vTime(lslEntryIdx); elapsedTrialTime = globalLslTimestamp - trialStartLSLTimestamp;
+                pythonFrameIdx = lutRowIdx - 1;
+                frameLUTData(lutRowIdx, :) = [pythonFrameIdx, globalLslTimestamp, elapsedTrialTime];
+
+                % Color correction matrix operations
+                imgDouble = double(imgRaw) / 255.0;
+                imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
+                imgProcessed = imgProcessed .^ gammaExponent;
+                imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
+                img = uint8(imgProcessed * 255);
+
+                lblText = sprintf('Trial: %03d | Frame: %d', trials(t).trial_id, pythonFrameIdx);
+                img = insertText(img, [15, 15], lblText, 'FontSize', 18, 'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
+
+                writeVideo(writer, img);
+                currentFrameNum = currentFrameNum + 1; lutRowIdx = lutRowIdx + 1;
+            end
+            close(writer);
+            if lutRowIdx <= totalFramesInTrial; frameLUTData(lutRowIdx:end, :) = []; end
+
+            % Save frame level look up table (.tsv) and sidecar json metadata
+            lutTable = array2table(frameLUTData, 'VariableNames', {'video_frame', 'raw_lsl_timestamp', 'elapsed_trial_time'});
+            writetable(lutTable, outLutPath, 'FileType', 'text', 'Delimiter', '\t');
+
+            sidecar = struct('SpatialReference', 'Native camera frame space pixel matrix arrays (1280x720)', 'RawSourceFile', view1Struct(1).name, 'TrialID', trials(t).trial_id, 'FrameRate', reader.FrameRate, 'TargetAnalysisEngine', 'DeepLabCut Pose Estimation', 'TemporalAlignment', struct('TimeSynchronizedVia', ['LSL FrameMarker_' num2str(contains(acqLabel, 'Side', 'IgnoreCase', true)) ' Stream'], 'LookupTableFile', [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv'], 'StartMarker', 'NPose', 'EndMarker', 'TrialOffset Reduction Buffer window'));
+            fid = fopen(outSidecarPath, 'w'); fprintf(fid, '%s', jsonencode(sidecar, 'PrettyPrint', true)); fclose(fid);
+        catch ME
+            fprintf('    ! Warning processing video slice [%s]: %s\n', acqLabel, ME.message);
+        end
+    end
+
+    % --- Step 6d: Video 3 - Analytical Multi-Modal Sync Plot ---
+    plotOutPath = fullfile(OUTPUT_MOTION_DIR, [baseOutName '_desc-motion-force.mp4']);
+    fig = figure('Color','k', 'Position',[50 50 1600 900], 'Visible','off');
+
+    ax3d = subplot(1,2,1,'Parent',fig); set(ax3d,'Color','k','XColor','w','YColor','w','ZColor','w','GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax3d,'on'); grid(ax3d,'on'); view(ax3d, 35, 20); ax3d.DataAspectRatio = [1 1 1];
+    trialPos3D = master_PosData(:, sIdx:eIdx);
+    xlim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); ylim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); zlim(ax3d, [0, max(trialPos3D(:),[],'omitnan')+0.2]);
+
+    hBones = gobjects(nBones, 1);
+    for b = 1:nBones
+        bname = segmentNames{bones(b,2)};
+        if contains(bname,'Right','IgnoreCase',true); col = rightColor; elseif contains(bname,'Left','IgnoreCase',true); col = leftColor; else; col = boneColor; end
+        hBones(b) = plot3(ax3d, [0 0],[0 0],[0 0], '-o','Color',col,'LineWidth',2.5,'MarkerFaceColor',col);
+    end
+    hHead = plot3(ax3d, 0,0,0, 'o', 'MarkerSize',12,'MarkerFaceColor',[1 0.85 0.6], 'MarkerEdgeColor','w');
+    hTime = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(2)-0.05, ax3d.ZLim(2)-0.05, 't = 0.00 s','Color','w','FontSize',12,'FontWeight','bold');
+    hEventLabel = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(1)+0.2, ax3d.ZLim(2)-0.05, '','Color','r','FontSize',24,'FontWeight','bold','HorizontalAlignment','left');
+    title(ax3d, sprintf('Trial %03d: 3D Segment Kinematics', trials(t).trial_id), 'Color', 'w', 'FontSize', 14);
+
+    ax2d = subplot(1,2,2,'Parent',fig); set(ax2d,'Color','k','XColor','w','YColor','w', 'GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax2d,'on'); grid(ax2d,'on'); ylim(ax2d,[0 maxForceLimit]); xlim(ax2d, [0, 3]);
+    xlabel(ax2d, 'Elapsed Trial Time (s)'); ylabel(ax2d, 'Force (N)'); title(ax2d, 'Loadsol Dynamic Force Distribution', 'Color', 'w', 'FontSize', 14);
+
+    tAxis = syncTrialData.elapsed_trial_time;
+    hFR = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_right, '-', 'Color', rightColor, 'LineWidth', 2.0, 'DisplayName', 'Right Foot');
+    hFL = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_left, '-', 'Color', leftColor,  'LineWidth', 2.0, 'DisplayName', 'Left Foot');
+    hVline = xline(ax2d, 0, '--','Color',[1 1 0.4],'LineWidth',1.5, 'HandleVisibility','off');
+    legend(ax2d, 'show', 'TextColor', 'w', 'Color', 'k', 'Location', 'northeast');
+
+    vw_plot = VideoWriter(plotOutPath, 'MPEG-4'); vw_plot.FrameRate = 30; vw_plot.Quality = 90; open(vw_plot);
+    frameStep = max(1, round(fs_lsl / vw_plot.FrameRate)); highlightWindowSamples = round(0.5 * fs_lsl);
+
+    for s = 1:frameStep:(eIdx - sIdx + 1)
+        if isnan(trialPos3D(1, s)); continue; end
+        globalMasterTimestamp = xTime_lsl(sIdx + s - 1);
+
+        currentFramePos = reshape(trialPos3D(:, s), 3, numSegments)';
+        for b = 1:nBones
+            p1 = bones(b,1); p2 = bones(b,2);
+            set(hBones(b), 'XData', [currentFramePos(p1,1) currentFramePos(p2,1)], 'YData', [currentFramePos(p1,2) currentFramePos(p2,2)], 'ZData', [currentFramePos(p1,3) currentFramePos(p2,3)]);
+        end
+        set(hHead, 'XData', currentFramePos(headIdx,1), 'YData', currentFramePos(headIdx,2), 'ZData', currentFramePos(headIdx,3));
+
+        currentTimeVal = tAxis(s);
+        set(hTime, 'String', sprintf('t = %.2f s', currentTimeVal)); hVline.Value = currentTimeVal;
+
+        if currentTimeVal <= 3; xlim(ax2d, [0, 3]); else; xlim(ax2d, [currentTimeVal - 3, currentTimeVal]); end
+
+        activeMarkerIdx = find((globalMasterTimestamp >= trialMarkerTimes) & (globalMasterTimestamp <= (trialMarkerTimes + (highlightWindowSamples / fs_lsl))), 1);
+        if ~isempty(activeMarkerIdx)
+            set(hEventLabel, 'String', trialMarkerTexts{activeMarkerIdx});
+            for b = 1:nBones; set(hBones(b), 'LineWidth', 3.5); end
+        else
+            set(hEventLabel, 'String', '');
+            for b = 1:nBones; set(hBones(b), 'LineWidth', 2.5); end
+        end
+        drawnow limitrate; writeVideo(vw_plot, getframe(fig));
+    end
+    close(vw_plot); close(fig);
 end
 fprintf('\n Batch execution finalized. Payloads saved to %s and multi-view diagnostics exported to %s.\n', OUTPUT_MOTION_DIR, OUTPUT_VIDEO_DIR);
