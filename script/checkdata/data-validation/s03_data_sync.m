@@ -242,8 +242,8 @@ for t = 1:trialCount
             reader = VideoReader(videoViewsToSlice{v});
             acqLabel = videoAcqLabels{v};
 
-            outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.avi']);
-            outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-contrasted_beh.json']);
+            outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.avi']);
+            outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.json']);
             outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
 
             % Resolve frame numbers matching this specific trial window
@@ -274,27 +274,55 @@ for t = 1:trialCount
             if isempty(startLslEntryIdx); [~, startLslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
             trialStartLSLTimestamp = vTime(startLslEntryIdx);
 
+            % Set a display duration for event text on screen (e.g., show event text for 0.5 seconds)
+            eventDisplayWindow = 0.5; % seconds
+            
             while hasFrame(reader) && (currentFrameNum <= endFrame)
                 imgRaw = readFrame(reader);
                 lslEntryIdx = find(vFrames == currentFrameNum, 1);
                 if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - currentFrameNum)); end
-
-                globalLslTimestamp = vTime(lslEntryIdx); elapsedTrialTime = globalLslTimestamp - trialStartLSLTimestamp;
+            
+                globalLslTimestamp = vTime(lslEntryIdx); 
+                elapsedTrialTime = globalLslTimestamp - trialStartLSLTimestamp;
                 pythonFrameIdx = lutRowIdx - 1;
                 frameLUTData(lutRowIdx, :) = [pythonFrameIdx, globalLslTimestamp, elapsedTrialTime];
-
-                % Color correction matrix operations
+            
+                % -------------------------------------------------------------------
+                % 1. Color Correction Pre-processing
+                % -------------------------------------------------------------------
                 imgDouble = double(imgRaw) / 255.0;
                 imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
                 imgProcessed = imgProcessed .^ gammaExponent;
                 imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
                 img = uint8(imgProcessed * 255);
-
-                lblText = sprintf('Trial: %03d | Frame: %d', trials(t).trial_id, pythonFrameIdx);
-                img = insertText(img, [15, 15], lblText, 'FontSize', 18, 'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
-
+            
+                % -------------------------------------------------------------------
+                % 2. Dynamic Event Lookup
+                % -------------------------------------------------------------------
+                % Check if the current frame timestamp falls inside an active event window
+                activeIdx = find((globalLslTimestamp >= trialMarkerTimes) & ...
+                                 (globalLslTimestamp <= (trialMarkerTimes + eventDisplayWindow)), 1);
+            
+                % -------------------------------------------------------------------
+                % 3. Burn Text onto Video Frame
+                % -------------------------------------------------------------------
+                % Default top-left frame overlay info
+                lblText = sprintf('Trial: %03d | Frame: %d | Time: %.2fs', ...
+                                  trials(t).trial_id, pythonFrameIdx, elapsedTrialTime);
+                img = insertText(img, [15, 15], lblText, 'FontSize', 18, ...
+                                 'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
+            
+                % If an event trigger occurs at this frame, burn a prominent banner overlay
+                if ~isempty(activeIdx)
+                    eventStr = sprintf('EVENT: %s', trialMarkerTexts{activeIdx});
+                    % Draws prominent text in red at the top-center of the image matrix
+                    img = insertText(img, [round(reader.Width/2 - 150), 50], eventStr, ...
+                                     'FontSize', 28, 'TextColor', 'red');
+                end
+            
                 writeVideo(writer, img);
-                currentFrameNum = currentFrameNum + 1; lutRowIdx = lutRowIdx + 1;
+                currentFrameNum = currentFrameNum + 1; 
+                lutRowIdx = lutRowIdx + 1;
             end
             close(writer);
             if lutRowIdx <= totalFramesInTrial; frameLUTData(lutRowIdx:end, :) = []; end
