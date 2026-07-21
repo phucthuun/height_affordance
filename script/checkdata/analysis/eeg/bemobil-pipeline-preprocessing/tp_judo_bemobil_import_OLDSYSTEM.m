@@ -107,8 +107,8 @@ end
 fprintf('\nSource XDF: %s\n', xdf_fullpath);
 
 % Output directories
-bids_out_folder = fullfile(bemobil_config.study_folder, bemobil_config.bids_target_folder, subEntity, sesEntity, 'eeg');
-raw_eeglab_folder = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, subEntity, sesEntity, 'eeg');
+bids_out_folder = fullfile(bemobil_config.study_folder, bemobil_config.bids_target_folder, subEntity, sesEntity);
+raw_eeglab_folder = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, subEntity, sesEntity);
 
 % Create output directories
 if ~exist(bids_out_folder, 'dir'), mkdir(bids_out_folder); end
@@ -158,6 +158,47 @@ EEG.data = double(EEG.data);
 
 fprintf('Loaded %d channels, %d samples at %.1f Hz\n', EEG.nbchan, EEG.pnts, EEG.srate);
 
+%% 4B. ADD TRIAL NUMBERS TO PER-TRIAL EVENT LABELS
+% Some datasets (older experiment versions) use bare event names
+% ('NPose', 'Neutral', 'Fight') without trial numbers, unlike
+% 'TrialOnset<N>'/'TrialOffset<N>' which already include them. This
+% propagates the current trial number onto NPose/Neutral/Fight based on
+% which TrialOnset<N>...TrialOffset<N> block they fall inside. Datasets
+% where these events are already numbered (e.g. 'Neutral1') are
+% unaffected, since the exact-match regex below won't match them.
+
+fprintf('\n--- Step: Relabeling trial events with trial numbers ---\n');
+current_trial = '';
+relabel_targets = {'NPose', 'Neutral', 'Fight'};
+n_relabeled = 0;
+
+for e = 1:length(EEG.event)
+    evt_type = EEG.event(e).type;
+    if ~ischar(evt_type), continue; end
+
+    onset_match = regexp(evt_type, '^TrialOnset(\d+)$', 'tokens', 'once');
+    if ~isempty(onset_match)
+        current_trial = onset_match{1};
+        continue
+    end
+
+    if ~isempty(regexp(evt_type, '^TrialOffset\d+$', 'once'))
+        current_trial = '';  % reset once trial closes, guards against mislabeling stray events outside a trial
+        continue
+    end
+
+    if ismember(evt_type, relabel_targets)
+        if isempty(current_trial)
+            warning('Event "%s" at latency %d found outside any TrialOnset/TrialOffset block — left unlabeled.', ...
+                evt_type, EEG.event(e).latency);
+            continue
+        end
+        EEG.event(e).type = [evt_type current_trial];
+        n_relabeled = n_relabeled + 1;
+    end
+end
+fprintf('Relabeled %d events with trial numbers.\n', n_relabeled);
+
 %% 5. LOAD CHANNEL LOCATIONS
 
 fprintf('\n--- Step 2: Loading Channel Locations ---\n');
@@ -181,10 +222,10 @@ end
 
 %% 6. REMOVE UNUSED CHANNELS
 
-if ~isempty(bemobil_config.channels_to_remove)
-    fprintf('\n--- Removing unused channels: %s ---\n', strjoin(bemobil_config.channels_to_remove, ', '));
-    EEG = pop_select(EEG, 'nochannel', bemobil_config.channels_to_remove);
-end
+% if ~isempty(bemobil_config.channels_to_remove)
+%     fprintf('\n--- Removing unused channels: %s ---\n', strjoin(bemobil_config.channels_to_remove, ', '));
+%     EEG = pop_select(EEG, 'nochannel', bemobil_config.channels_to_remove);
+% end
 
 %% 7. RENAME CHANNELS (if configured)
 

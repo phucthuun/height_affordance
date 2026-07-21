@@ -10,7 +10,7 @@ clear; clc; close all;
 
 %% 0. LOAD CONFIGURATION
 % Make sure judo_bemobil_config.m is in your path or current directory
-run('tp_judo_bemobil_config.m');
+run('tp_judo_bemobil_config.m');MH9HXJ
 
 fprintf('============ BEMOBIL XDF IMPORT TO BIDS ============\n');
 
@@ -107,8 +107,8 @@ end
 fprintf('\nSource XDF: %s\n', xdf_fullpath);
 
 % Output directories
-bids_out_folder = fullfile(bemobil_config.study_folder, bemobil_config.bids_target_folder, subEntity, sesEntity, 'eeg');
-raw_eeglab_folder = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, subEntity, sesEntity, 'eeg');
+bids_out_folder = fullfile(bemobil_config.study_folder, bemobil_config.bids_target_folder, subEntity, sesEntity);
+raw_eeglab_folder = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, subEntity, sesEntity);
 
 % Create output directories
 if ~exist(bids_out_folder, 'dir'), mkdir(bids_out_folder); end
@@ -181,10 +181,10 @@ end
 
 %% 6. REMOVE UNUSED CHANNELS
 
-if ~isempty(bemobil_config.channels_to_remove)
-    fprintf('\n--- Removing unused channels: %s ---\n', strjoin(bemobil_config.channels_to_remove, ', '));
-    EEG = pop_select(EEG, 'nochannel', bemobil_config.channels_to_remove);
-end
+% if ~isempty(bemobil_config.channels_to_remove)
+%     fprintf('\n--- Removing unused channels: %s ---\n', strjoin(bemobil_config.channels_to_remove, ', '));
+%     EEG = pop_select(EEG, 'nochannel', bemobil_config.channels_to_remove);
+% end
 
 %% 7. RENAME CHANNELS (if configured)
 

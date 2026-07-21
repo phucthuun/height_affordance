@@ -8,17 +8,6 @@ bemobil_config.raw_data_folder = fullfile(bemobil_config.upper_folder, 'sourceda
 bemobil_config.study_folder = fullfile(bemobil_config.upper_folder, 'derivatives', 'EEG_bemobil_pipeline');
 bemobil_config.filename_prefix = 'sub-';
 
-% foldernames (NEED to have a filesep at the end, sorry!) 
-% see "template_import_xdf2bids.m" and "template_import_bids2set.m" to see how the raw EEGLAB folder is created from data in BIDS
-% bemobil_config.bids_target_folder = ['1_BIDS-data' filesep];
-% bemobil_config.raw_EEGLAB_data_folder = ['2_raw-EEGLAB' filesep];
-% bemobil_config.EEG_preprocessing_data_folder = ['3_EEG-preprocessing' filesep];
-% bemobil_config.spatial_filters_folder = ['4_spatial-filters' filesep];
-% bemobil_config.spatial_filters_folder_AMICA = ['4-1_AMICA' filesep];
-% bemobil_config.single_subject_analysis_folder = ['5_single-subject-EEG-analysis' filesep];
-% bemobil_config.single_subject_motion_folder = ['6_single-subject-motion-analysis' filesep];
-% bemobil_config.single_subject_eye_folder = ['7_single-subject-EYE-analysis' filesep];
-
 bemobil_config.bids_target_folder = ['1_BIDS-data' filesep];
 bemobil_config.raw_EEGLAB_data_folder = ['2_raw-EEGLAB' filesep];
 bemobil_config.EEG_preprocessing_data_folder = ['3_EEG-preprocessing' filesep];
@@ -27,7 +16,6 @@ bemobil_config.spatial_filters_folder_AMICA = ['4-1_AMICA' filesep];
 bemobil_config.single_subject_analysis_folder = ['5_single-subject-EEG-analysis' filesep];
 bemobil_config.single_subject_motion_folder = ['6_single-subject-motion-analysis' filesep];
 bemobil_config.single_subject_eye_folder = ['7_single-subject-EYE-analysis' filesep];
-
 
 
 % filenames
@@ -39,6 +27,8 @@ bemobil_config.filtered_filename = 'filtered.set';
 bemobil_config.amica_filename_output = 'AMICA.set';
 bemobil_config.dipfitted_filename = 'dipfitted.set';
 bemobil_config.preprocessed_and_ICA_filename = 'preprocessed_and_ICA.set';
+% bemobil_config.preprocessed_and_rejected_ICA_filename =
+% 'preprocessed_and_rejected_ICA.set'; see script all_EGG
 bemobil_config.single_subject_cleaned_ICA_filename = 'cleaned_with_ICA.set';
 
 %% Preprocessing
@@ -46,6 +36,7 @@ bemobil_config.single_subject_cleaned_ICA_filename = 'cleaned_with_ICA.set';
 % enter channels that you did not use at all (e.g. with our custom MoBI 160 chan layout, only 157 chans are used), leave
 % empty, if all channels are used
 % process_config.channels_to_remove = {'N29' 'N30' 'N31'};
+bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
 bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
 
 % enter EOG channel names here:
@@ -85,8 +76,8 @@ bemobil_config.resample_freq = [];
 %                                           If empty, use only chan_detected_fraction_threshold. Can be either a fraction 
 %                                           of all channels (will be rounded, e.g. 1/5 of chans) or a specific integer number
 
-bemobil_config.chancorr_crit = 0.70;
-bemobil_config.chan_max_broken_time = 0.5;
+bemobil_config.chancorr_crit = 0.80;
+bemobil_config.chan_max_broken_time = 0.3;
 bemobil_config.chan_detect_num_iter = 10;
 bemobil_config.chan_detected_fraction_threshold = 0.5;
 bemobil_config.flatline_crit = 'off';
@@ -164,6 +155,7 @@ bemobil_config.iclabel_classifier = 'lite';
 % bemobil_config.iclabel_classes = [1]; % this setting removes everything that is not brain
 % bemobil_config.iclabel_classes = [1 7]; % this setting removes everything that is classified as an artifact IC, but not brain, and not "other"
 bemobil_config.iclabel_classes = [1 2 4 5 6 7]; % this setting only removes eye components
+bemobil_config.iclabel_classes = [1 4 5 6 7]; % this setting only removes eye + muscle components
 
 % if the threshold is set to -1, the popularity classifier is used (i.e. every IC gets the class with the highest
 % probability), if it is set to a value, the summed score of the iclabel_classes must be higher than this threshold to
@@ -173,8 +165,8 @@ bemobil_config.iclabel_threshold = -1;
 %% finalization
 
 % filtering the final dataset
-bemobil_config.final_filter_lower_edge = 0.2; % this should not lead to any issues downstream but remove all very slow drifts
-bemobil_config.final_filter_higher_edge = [];
+bemobil_config.final_filter_lower_edge = 1; % this should not lead to any issues downstream but remove all very slow drifts
+bemobil_config.final_filter_higher_edge = []; % keep open for more analyses; keep 40 Hz if only  
 
 %% Motion Processing Parameters
 
