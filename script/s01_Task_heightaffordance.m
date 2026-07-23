@@ -1,17 +1,13 @@
 %% ---1 Creating a log file and configuration
 log = struct;
-[subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, 'h');
+[subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, taskLabel(1));
 
 % Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
 
 
-%% ---2 List and load stimuli
-blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
-
-
-%% --- 3. Initialize Psychtoolbox (PTB-3) ---
+%% --- 2. Initialize Psychtoolbox (PTB-3) ---
 log.config.ptb = ptb_setting(log);
 w1  = log.config.ptb.w1;
 sw  = log.config.ptb.sw;
@@ -27,6 +23,11 @@ heightRatio = targetHeight / targetWidth;
 drawW = sw; drawH = sw * heightRatio; 
 newBottom = sh - verticalShift; newTop = newBottom - drawH;
 posC = [0, newTop, sw, newBottom];
+DrawFormattedText(w1, sprintf('WELCOME TO XPLO-Judo\n %s', log.config.task.instruction.(sprintf('%s', languageInput)).(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1); 
+
+%% --- 3 List and load stimuli
+blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 %% --- 4. Lab Streaming Layer (LSL) Synchronization Setup ---
 lib = lsl_loadlib();
@@ -49,60 +50,75 @@ b = startRun;
 while b <= maxBlocks && ~terminateExperiment
 
     experimenter_message(sprintf('RUN %d', b));
+    
     %% --- 5a - SENSORS PREPARATION
-    experimenter_message('XPLO-Judo App: Input data');
+    experimenter_message({'XPLO-Judo App: Input', '', ...
+        sprintf('1. Participant ID: %s', subID),...
+        sprintf('2. Task: %s', taskLabel),...
+        sprintf('3. Run: 00%d', b),...
+        '>>> click [Initialize BIDS Structure]'});
 
     % Video
     experimenter_message({'Video', '', ...
-        '1. Run  : Python Script' ...
-        '2  Check: video streams'});
-
-    experimenter_message({'TELL PARTICIPANT THAT WE CAN START THE NEW RUN'});
+        '1. Run  : Python Script', ...
+        sprintf('2. Input: Participant ID (%s), Task (%s), Session (%s), Run (00%d)', subID, taskLabel, sesID, b),...
+        '3. Check: video streams: SideView + UpperView'});
     
     % EEG check
     DrawFormattedText(w1, log.config.task.instruction.check_eeg, 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1);
     experimenter_message({'EEG', '', ...
-        '1. Gel  : bad channels', ...
-        '2. Check: mbtStreamer STREAMS '});
+        '1. Gel  : tell experimenter about bad channels (if any)', ...
+        '2. Start: mbtStreamer STREAMS '});
 
     % Xsens calibration
     DrawFormattedText(w1, log.config.task.instruction.check_motion, 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1);
     experimenter_message({'XSENS', '', ...
-        '1. Measure  : measure participant body and (optional) save config', ...
+        '0. Open     : MVN and streaming_protocol', '',...
+        'Communicate with participant and experimenter what we will do:',...
+        '1. Measure  : measure participant body and save config (if not done)', ...
         '2. Calibrate: inform participant to N-Pose and Walk', ...
-        '3. Check    : Calibration quality at least ACCEPTABLE'});
+        '3. Check    : Calibration quality GOOD ',...
+        '            (if not GOOD  : calibrate max. 2 more times to achieve GOOD)',...
+        '            (from 3rd time: calibrate until at least ACCEPTABLE)'});
     
     % Loadsol calibration and recording
     DrawFormattedText(w1, log.config.task.instruction.check_force, 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1);
     experimenter_message({'LOADSOL', '', ...
-        '1. Connect: loadapp detects Bluetooth to 2 loadsols and 1 loadsync', ...
-        '2. Zero   : inform participant to lift each foot (=sensor)', ...
-        '3. Start  : loadapp starts recording'});
+        '(if not done)',...
+        '0. Go turn on bluetooth of loadsync behind the PC', ...
+        '0. Add      : [Settings] User Profile >> enter Body weight and Body height','',...
+        '1. Connect  : [Measurement] Manage sensors: detect 2 loadsols and 1 loadsync', ...
+        '2. Zero     : [Measurement] Measurement >> Live chart; ask participant: We will calibrate the shoes now, please lift each foot as I say; zero each foot as loadapp instructs', ...
+        '3. Start    : loadapp starts recording'});
 
     % Eye-tracking connection
-    DrawFormattedText(w1, log.config.task.instruction.eyetracking, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.check_eye, 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1);
     experimenter_message({'Eye-Tracking', '', ...
-        '1. Wear  : bring phone back to participant', ...
+        '1. Wear  : Experimenter brings phone back to participant', ...
         '2. Check : fixation is at the right position'});
 
     % Recording
+    DrawFormattedText(w1, log.config.task.instruction.eyetracking, 'center', 'center', log.config.task.colour.white); 
+    Screen('Flip', w1);
     experimenter_message({'LabRecorder', '', ...
         '1. Update: CHECK THAT ALL STREAMS ARE VISIBLE', ...
-        '2. Enter : [Task], [Run], [Participant]', ...
+        sprintf('2. Enter : Task [%s], Run [00%d], Participant[%s]', taskLabel, b, subID), ...
         '3. Start : Lab Recorder starts recording'});
 
     experimenter_message({'XSENS', '', ...
         '1. Record: MVN starts recording', ...
-        '2. Check : loadsol has frequently distributed BLACK PINS'});
+        '2. Check : loadapp shows frequently distributed BLACK PINS'});
 
     experimenter_message({'Eye-Tracking', '', ...
         '1. Record: Neon Monitor starts recording'});
 
-    experimenter_message({'READY FOR EYE-TRACKING CALIBRATION'});
+    experimenter_message({'Communicate:',...
+        'ARE YOU READY FOR EYE-TRACKING CALIBRATION?',...
+        '(you = technician AND participant)'});
 
 
     %% --- 5b - EYE TRACKING CALIBRATION
@@ -135,7 +151,7 @@ while b <= maxBlocks && ~terminateExperiment
             
         catch ME
             if strcmp(ME.identifier, 'EyeTracker:EscapePressed')
-                fprintf('\n[CALIBRATION INTERRUPTED] Operator pressed ESC during calibration.\n');
+                fprintf('\n[CALIBRATION INTERRUPTED] Technician pressed ESC during calibration.\n');
                 ShowCursor;
                 escChoice = questdlg(...
                     'Calibration interrupted via ESC. What would you like to do?', ...
@@ -185,8 +201,11 @@ while b <= maxBlocks && ~terminateExperiment
     nextTexNeu = []; nextTexFgt = [];
     
     % Display block initialization screen
-    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s', b, log.config.task.instruction.(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s \nExperimenter can leave the tatami', b, log.config.task.instruction.(sprintf('%s', languageInput)).(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1); 
+    experimenter_message({'Communicate:',...
+        'ARE YOU READY TO FIGHT?',...
+        '(Click OK after Experimenter has left)'});
     outlet.push_sample({sprintf('BlockStart%d', b)});
 
     for t = 1:numTrials
@@ -201,13 +220,13 @@ while b <= maxBlocks && ~terminateExperiment
         % --- INTERVENTION BRANCHING ROUTING MENU ---
         if intervene
             fprintf('\n[INTERCEPTED] Experimenter hit ESC. Presentation paused.\n');
-            DrawFormattedText(w1, 'Experiment Paused by Operator.\nIntervention Menu open on operator screen.', 'center', 'center', log.config.task.colour.white);
+            DrawFormattedText(w1, 'Experiment Paused by Technician.\nWe are coming to you now', 'center', 'center', log.config.task.colour.white);
             Screen('Flip', w1);
             
             ShowCursor;
             interceptChoice = questdlg(...
                 sprintf('Run %d | Trial %d interrupted. What would you like to do?', b, t), ...
-                'Operator Interrupt Menu', ...
+                'Technician Interrupt Menu', ...
                 'Proceed to Next Trial', 'Abort & Go to Next Run', 'Abort & End Experiment', 'Proceed to Next Trial');
             HideCursor;
             
@@ -310,7 +329,7 @@ while b <= maxBlocks && ~terminateExperiment
         % Crop missing pre-allocated trial rows before saving partial execution dataset
         results(t:end, :) = []; 
         outlet.push_sample({sprintf('BlockAborted%d', b)}); 
-        fprintf('\n[ABORTED] Run %d cut short by operator at trial %d.\n', b, t);
+        fprintf('\n[ABORTED] Run %d cut short by Technician at trial %d.\n', b, t);
     else
         outlet.push_sample({sprintf('BlockEnd%d', b)}); 
     end
