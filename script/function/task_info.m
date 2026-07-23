@@ -1,13 +1,14 @@
-function taskLabel = subject_info(loc)
+function [taskLabel, languageInput] = subject_info(loc)
     name = 'Choosing Task';
     
     % Define the prompts for the user
     prompt = {...
-        'Task ([t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]):'
+        'Task ([t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]):',...
+        'Language ([en] english, [de] deutsch)'
         }; 
     
     % Set default values
-    defaults = {''};
+    defaults = {'','en'};
     
     % Open dialog box
     answer = inputdlg(prompt, name, 1, defaults); 
@@ -21,4 +22,7 @@ function taskLabel = subject_info(loc)
         case 'test',    taskLabel = 'test';
         otherwise, taskLabel = lower(regexprep(taskInput, '\W', '')); % Clean custom input
     end
+
+    % 2. Languae
+    languageInput = answer{2};
 end
