@@ -8,7 +8,7 @@ function [subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, defa
         'Starting Run Number (default 001):', ...
         'Neon Phone ([s] samsung, [m] motorola):'}; 
     
-    defaults = {'', defaulttask, 'S001', '001', 's'};
+    defaults = {'', defaulttask, 'S001', '001', 'm'};
     answer = inputdlg(prompt, name, 1, defaults); 
     
     if isempty(answer) || isempty(answer{1})
