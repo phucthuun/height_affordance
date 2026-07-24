@@ -1,15 +1,15 @@
-% %% 1. Preparations 
-% sca;            % Close PTB windows
-% close all;      % Close MATLAB figures
-% clearvars;      % Clear variables
-% clc;            % Clear command window
-% 
-% %% Set paths
-% loc = find_folderpath();
-% 
-% %% List and load stimuli
-% blocks.training         = stimuli_randomize_preload_double32(loc.stimuli.training, 1);
-% blocks.heightaffordance = stimuli_randomize_preload_double32(loc.stimuli.heightaffordance, 5);
+%% 1. Preparations 
+sca;            % Close PTB windows
+close all;      % Close MATLAB figures
+clearvars;      % Clear variables
+clc;            % Clear command window
+
+% Set paths
+loc = find_folderpath();
+
+%% List and load stimuli
+blocks.training         = stimuli_randomize_preload_double32(loc.stimuli.training, 1);
+blocks.heightaffordance = stimuli_randomize_preload_double32(loc.stimuli.heightaffordance, 5);
 
 %% Master Sequence Definition
 % Column 1: Task Label
