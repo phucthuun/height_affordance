@@ -1,4 +1,4 @@
-function [subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, defaulttask)
+function [subID, sesID, startRun, startTrial, taskLabel, PHONE_IP] = subject_info2(loc, defaulttask)
     name = 'BIDS Experimental Setup';
     
     prompt = {...
@@ -6,9 +6,10 @@ function [subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, defa
         'Task ([t] training, [h] height-affordance, [e] estimate):', ...
         'Session ID (default S001):', ...
         'Starting Run Number (default 001):', ...
+        'Starting Trial Number (default 1):', ...
         'Neon Phone ([s] samsung, [m] motorola):'}; 
     
-    defaults = {'', defaulttask, 'S001', '001', 'm'};
+    defaults = {'', defaulttask, 'S001', '001', '001', 'm'};
     answer = inputdlg(prompt, name, 1, defaults); 
     
     if isempty(answer) || isempty(answer{1})
@@ -34,10 +35,13 @@ function [subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, defa
         sesID = sprintf('%03d', str2double(sesInput));
     end
     
-    startRun = str2double(answer{4}); % Convert to double so we can loop mathematically
+    startRun = str2double(answer{4}); 
     if isnan(startRun); startRun = 1; end
 
-    PHONE_Input = answer{5};
+    startTrial = str2double(answer{5}); 
+    if isnan(startTrial); startTrial = 1; end
+
+        PHONE_Input = answer{6};
     switch PHONE_Input
         case 's',       PHONE_IP = '192.168.0.28';
         case 'm',       PHONE_IP = '192.168.0.163';
