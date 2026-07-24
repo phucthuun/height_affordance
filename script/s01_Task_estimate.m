@@ -11,19 +11,19 @@ totalTic = tic;
 if exist(mat_file, 'file')
     fprintf('Found existing randomized list. Loading...\n');
     data = load(mat_file, 'masterTrials'); 
-    blocks = data.masterTrials;
+    blocks.estimate = data.masterTrials;
 else
     fprintf('No randomized list found. Commencing loading...\n');
     % This calls the simple preloader we created earlier
-    % blocks = stimuli_preload_simple(loc.stimuli.estimate, loc.stimuli.estimate, 1);
-    blocks = stimuli_randomize_preload_estimate(loc.stimuli.estimate, loc.stimuli.estimate, 1);
+    % blocks.estimate = stimuli_preload_simple(loc.stimuli.estimate, loc.stimuli.estimate, 1);
+    blocks.estimate = stimuli_randomize_preload_estimate(loc.stimuli.estimate, loc.stimuli.estimate, 1);
 end
 
 fprintf('Finished loading stimuli after %.2f seconds.\n', toc(totalTic));
 
 %% 4. Initialize Result Table
 % Calculate total trials
-numTotalTrials = sum(cellfun(@length, blocks));
+numTotalTrials = sum(cellfun(@length, blocks.estimate));
 
 % Added 'estimate' column to your table structure
 results = table('Size', [numTotalTrials, 8], ...
@@ -69,8 +69,8 @@ globalTrialCount = 0;
 log.time.start = datestr(now); 
 outlet.push_sample({'Experiment_Start'});  
 
-for b = 1:length(blocks)
-    trials = blocks{b}; 
+for b = 1:length(blocks.estimate)
+    trials = blocks.estimate{b}; 
     numTrials = length(trials);
         
     outlet.push_sample({sprintf('Block%d_Start', b)});
