@@ -1,11 +1,15 @@
-%% 1. Preparations 
-sca;            % Close PTB windows
-close all;      % Close MATLAB figures
-clearvars;      % Clear variables
-clc;            % Clear command window
-
-%% Set paths
-loc = find_folderpath();
+% %% 1. Preparations 
+% sca;            % Close PTB windows
+% close all;      % Close MATLAB figures
+% clearvars;      % Clear variables
+% clc;            % Clear command window
+% 
+% %% Set paths
+% loc = find_folderpath();
+% 
+% %% List and load stimuli
+% blocks.training         = stimuli_randomize_preload_double32(loc.stimuli.training, 1);
+% blocks.heightaffordance = stimuli_randomize_preload_double32(loc.stimuli.heightaffordance, 5);
 
 %% Master Sequence Definition
 % Column 1: Task Label
@@ -50,7 +54,8 @@ switch startChoice
 end
 
 %% Run Pipeline
-for step = startIndex:size(allSteps, 1)
+step = startIndex;
+while step <= size(allSteps, 1)
     taskLabel = allSteps{step, 1};
     defaultTaskFlag = allSteps{step, 2};
     scriptName = allSteps{step, 3};
@@ -60,28 +65,52 @@ for step = startIndex:size(allSteps, 1)
     fprintf('=========================================\n\n');
     
     % Execute the task script
-    % (Inside the script, subject_info2 will run using the defaultTaskFlag)
     run(fullfile(loc.script, scriptName));
     
-    % If this was the last script, finish sequence
-    if step == size(allSteps, 1)
-        msgbox('Experiment 3 Sequence Completed Successfully!', 'Experiment Finished');
-        break;
-    end
-    
-    % Inter-Script GUI Dialog (Between Training, Height Affordance, and Estimate)
-    nextTaskLabel = allSteps{step+1, 1};
-    promptMsg = sprintf(['Finished Task: %s\n\n' ...
-                         'Next Task in Queue: %s\n\n' ...
-                         'What would you like to do next?'], ...
-                         upper(taskLabel), upper(nextTaskLabel));
-                     
-    choice = questdlg(promptMsg, ...
-                      sprintf('Completed Phase: %s', upper(taskLabel)), ...
-                      'Run Next Script', 'Stop Experiment', 'Run Next Script');
-                  
-    if ~strcmp(choice, 'Run Next Script')
-        fprintf('\nExperiment sequence stopped by operator after %s.\n', taskLabel);
-        break;
+    % Handle Training repetition specifically
+    if strcmp(taskLabel, 'training')
+        trainChoice = questdlg('Training complete. What would you like to do next?', ...
+                               'Training Finished', ...
+                               'Repeat Training', 'Do the task FOR REAL', 'Stop Experiment', ...
+                               'Continue to Next Task');
+        
+        switch trainChoice
+            case 'Repeat Training'
+                fprintf('\nRepeating Training phase...\n');
+                continue; % Restarts the loop without incrementing 'step'
+                
+            case 'Continue to Next Task'
+                step = step + 1; % Move forward to the next task
+                
+            otherwise % 'Stop Experiment' or dialog closed
+                fprintf('\nExperiment sequence stopped by operator after %s.\n', taskLabel);
+                break;
+        end
+        
+    % Handle subsequent tasks (Height Affordance, Estimate, etc.)
+    else
+        % If this was the last script, finish sequence
+        if step == size(allSteps, 1)
+            msgbox('Experiment Sequence Completed Successfully!', 'Experiment Finished');
+            break;
+        end
+        
+        % Inter-Script GUI Dialog for remaining tasks
+        nextTaskLabel = allSteps{step+1, 1};
+        promptMsg = sprintf(['Finished Task: %s\n\n' ...
+                             'Next Task in Queue: %s\n\n' ...
+                             'What would you like to do next?'], ...
+                             upper(taskLabel), upper(nextTaskLabel));
+                         
+        choice = questdlg(promptMsg, ...
+                          sprintf('Completed Phase: %s', upper(taskLabel)), ...
+                          'Run Next Script', 'Stop Experiment', 'Run Next Script');
+                      
+        if strcmp(choice, 'Run Next Script')
+            step = step + 1; % Advance to the next task
+        else
+            fprintf('\nExperiment sequence stopped by operator after %s.\n', taskLabel);
+            break;
+        end
     end
 end
