@@ -96,7 +96,7 @@ for b = 1:length(blocks)
         fprintf('Sub: %s | Stance: %d | Lat: %s\n', trials(t).subID, trials(t).stance, trials(t).laterality);
         
         % Script pauses here for experimenter input
-        val = input('Enter participant estimate (cm): ');
+        val = input('Enter participant estimate (cm) - If no answer please input 150: ');
         
         % Re-block characters from the Command Window
         ListenChar(2); 
