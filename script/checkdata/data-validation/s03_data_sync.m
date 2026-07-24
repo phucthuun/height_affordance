@@ -95,7 +95,7 @@ sideCamMarkerIdx  = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_1'), stre
 upperCamMarkerIdx = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_0'), streams), 1);
 
 fprintf('Parsing reprocessed MVNX structural frame elements...\n');
-% tree = load_mvnx(fullMvnxPath);
+tree = load_mvnx(fullMvnxPath);
 frameRate_mvnx = str2num(tree.metaData.subject_frameRate); numSegments = str2num(tree.metaData.subject_segmentCount); nSamples_mvnx = length(tree.frame);
 segmentNames = cell(numSegments, 1); for s = 1:numSegments; segmentNames{s} = tree.segmentData(s).label; end
 mvnx_allPos = zeros(numSegments * 3, nSamples_mvnx);
@@ -245,7 +245,7 @@ for t = 1:trialCount
             reader = VideoReader(videoViewsToSlice{v});
             acqLabel = videoAcqLabels{v};
     
-            outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.avi']);
+            outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh']);
             outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.json']);
             outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
     
