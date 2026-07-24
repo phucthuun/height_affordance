@@ -102,12 +102,12 @@ if __name__ == "__main__":
 
     while True:
         print("\n--- NEW RECORDING SESSION ---")
-        subj_id = input("Subject ID: ").strip()
+        subj_id = input("Participant ID: ").strip()
         if not subj_id: continue
         
         # --- Task Mapping Logic ---
         print("Task Options: [t] training, [h] height-affordance, [e] estimate, [test] test, [Or type custom]")
-        task_input = input("Task Name/Number: ").strip()
+        task_input = input("Task Name: ").strip()
         
         task_map = {
             "t"     :"training",
