@@ -2,6 +2,10 @@
 log = struct;
 [subID, sesID, startRun, taskLabel, PHONE_IP] = subject_info2(loc, taskLabel(1));
 
+if taskLabel(1) == "training" % if training, then always run the first block of training
+    startRun = 1;
+end
+
 % Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
@@ -26,8 +30,8 @@ posC = [0, newTop, sw, newBottom];
 DrawFormattedText(w1, sprintf('WELCOME TO XPLO-Judo\n %s', log.config.task.instruction.(sprintf('%s', languageInput)).(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
     Screen('Flip', w1); 
 
-%% --- 3 List and load stimuli
-blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
+% %% --- 3 List and load stimuli
+% blocks = stimuli_randomize_preload_double32(loc.stimuli.(sprintf('%s', taskLabel)), log.config.task.numBlocks.(sprintf('%s', taskLabel)));
 
 %% --- 4. Lab Streaming Layer (LSL) Synchronization Setup ---
 lib = lsl_loadlib();
@@ -42,7 +46,7 @@ outlet.push_sample({'ExperimentStart'});
 totalTic = tic;  
 
 % Determine maximum blocks available inside preloaded master array
-maxBlocks = length(blocks);
+maxBlocks = length(blocks.(sprintf('%s', taskLabel)));
 
 % Loop sequence starts at the run number entered by the experimenter
 b = startRun; 
@@ -186,7 +190,7 @@ while b <= maxBlocks && ~terminateExperiment
     end
 
     %% --- 5c - HEIGHT AFFORDANCE 
-    trials = blocks{b}; 
+    trials = blocks.(sprintf('%s', taskLabel)){b}; 
     numTrials = length(trials);
     
     % Allocate results data table specifically for this unique run/block execution
@@ -350,44 +354,14 @@ while b <= maxBlocks && ~terminateExperiment
     % Stop further processing loops completely if 'Abort & End Experiment' was selected
     if terminateExperiment; break; end
     
-    % %% --- 7. NATURAL END-OF-BLOCK ROUTING (Only hit if block finished normally or via 'Next Run') ---
-    % ShowCursor;
-    % 
-    % % High-visibility system notification sent to command console window
-    % fprintf('\n==================================================\n');
-    % fprintf('⚠ CRITICAL REMINDER FOR THE EXPERIMENTER ⚠\n');
-    % fprintf('Make sure to manually STOP and SAVE the other data streams\n');
-    % fprintf('(Xsens, LabRecorder, loadsol, Neon, camera)\n');
-    % fprintf('before initiating the next block!\n');
-    % fprintf('==================================================\n\n');
-    % 
-    % % Interactive Dialogue UI warning layout
-    % msgString = sprintf(['Run %d Complete.\n\n' ...
-    %     '⚠ REMINDER: Please STOP and SAVE the other data streams' ...
-    %     '(Xsens, LabRecorder, loadsol, Neon, camera)\n\n' ...
-    %     'What would you like to do next?'], b);
-    % 
-    % choice = questdlg(msgString, ...
-    %     'Experiment Control Menu & Data Sync Reminder', ...
-    %     'Next Run', 'Save & End Experiment', 'Next Run'); 
-    % HideCursor;
-    % 
-    % switch choice
-    %     case 'Next Run'
-    %         b = b + 1; 
-    %         if b <= maxBlocks
-    %             DrawFormattedText(w1, 'Take a break.\n\nExperimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
-    %             Screen('Flip', w1);
-    %         end
-    %     case 'Save & End Experiment'
-    %         fprintf('Experiment ended by experimenter request.\n');
-    %         terminateExperiment = 1;
-    % end
 
-    %% --- 7. BREAK (60min) after each RUN---
+    %% --- 7. BREAK (10min) after each RUN---
     % Call the local desktop countdown function UI
-    choice = run_block_break_menu(b, log); 
-    
+    if taskLabel == "training"
+        choice = run_training_break_menu(b, log); 
+    elseif taskLabel == "heightaffordance"
+        choice = run_block_break_menu(b, log); 
+    end
     switch choice
         case 'Next Run'
             b = b + 1; 
