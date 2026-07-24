@@ -9,21 +9,38 @@
 
 
 
-import os
-import glob
+import os, glob, re
 import numpy as np
 import pandas as pd
 import cv2
 import deeplabcut
 from deeplabcut.utils import auxiliaryfunctions
 
-config_dir = r"C:\Data\Research\10_Data\derivatives\dlc_superanimal\sub-Maximilian\ses-S001"
-raw_video_dir       = r"C:\Data\Research\10_Data\derivatives\syncdata\sub-Maximilian\ses-S001\training_video"
-zeroshot_video_dir  = r"C:\Data\Research\10_Data\derivatives\dlc_superanimal\sub-Maximilian\ses-S001\video-zeroshot"
+# 1. Interactive Target Selection
+print("============ SuperAnimal Zero-Shot Inference ============")
+sub_in = input("Enter Subject ID (e.g., MH9HXJ) [default: MH9HXJ]: ").strip() or "MH9HXJ"
+ses_in = input("Enter Session ID (e.g., S001) [default: S001]: ").strip() or "S001"
+run_in = input("Enter Run ID (e.g., 002) [default: 002]: ").strip() or "002"
+cam_in = input("Camera view - 's' for SideView, 'u' for UpperView [default: s]: ").strip().lower() or "s"
+mach_in = input("Training machine - 'local' or 'tardis' [default: local]: ").strip().lower() or "local"
+
+subLabel = re.sub(r'^sub-', '', sub_in)
+sesLabel = re.sub(r'^ses-', '', ses_in)
+runLabel = re.sub(r'^run-', '', run_in).zfill(3)
+
+subID = f"sub-{subLabel}"
+sesID = f"ses-{sesLabel}"
+runID = f"run-{runLabel}"
+
+camera_view = "UpperView" if cam_in == "u" else "SideView"
+detector_name = "fasterrcnn_resnet50_fpn_v2" if mach_in == "tardis" else "fasterrcnn_mobilenet_v3_large_fpn"
+
+config_dir = rf"C:\Data\Research\10_Data\derivatives\dlc_superanimal\{subID}\{sesID}\{camera_view}"
+raw_video_dir       = rf"C:\Data\Research\10_Data\derivatives\syncdata\{subID}\{sesID}\video"
+zeroshot_video_dir  = rf"C:\Data\Research\10_Data\derivatives\dlc_superanimal\{subID}\{sesID}\{camera_view}\video-zeroshot"
 
 with open(os.path.join(zeroshot_video_dir, "flagged_trials.txt")) as f:
     flagged_names = [line.strip() for line in f if line.strip()]
-
 # back to raw_video_dir: we need clean, unlabeled source video for
 # project registration and frame extraction, not the annotated video-zeroshot outputs
 flagged_videos = [os.path.join(raw_video_dir, name) for name in flagged_names]

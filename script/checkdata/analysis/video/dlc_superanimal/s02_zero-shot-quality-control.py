@@ -4,9 +4,30 @@
 # (1) qc_ranking.csv 
 # (2) flagged_trials.txt documents the trials worth correcting
 
-import pandas as pd, glob, os
+import pandas as pd, glob, os, re
 
-out_root = r"C:\Data\Research\10_Data\derivatives\dlc_superanimal\sub-MH9HXJ\ses-S001\UpperView\video-zeroshot"
+# 1. Interactive Target Selection
+print("============ SuperAnimal Zero-Shot Inference ============")
+sub_in = input("Enter Subject ID (e.g., MH9HXJ) [default: MH9HXJ]: ").strip() or "MH9HXJ"
+ses_in = input("Enter Session ID (e.g., S001) [default: S001]: ").strip() or "S001"
+run_in = input("Enter Run ID (e.g., 002) [default: 002]: ").strip() or "002"
+cam_in = input("Camera view - 's' for SideView, 'u' for UpperView [default: s]: ").strip().lower() or "s"
+mach_in = input("Training machine - 'local' or 'tardis' [default: local]: ").strip().lower() or "local"
+
+subLabel = re.sub(r'^sub-', '', sub_in)
+sesLabel = re.sub(r'^ses-', '', ses_in)
+runLabel = re.sub(r'^run-', '', run_in).zfill(3)
+
+subID = f"sub-{subLabel}"
+sesID = f"ses-{sesLabel}"
+runID = f"run-{runLabel}"
+
+camera_view = "UpperView" if cam_in == "u" else "SideView"
+detector_name = "fasterrcnn_resnet50_fpn_v2" if mach_in == "tardis" else "fasterrcnn_mobilenet_v3_large_fpn"
+
+print(f" -> {subID} | {sesID} | {runID} | View: {camera_view} | Machine: {mach_in} | Detector: {detector_name}")
+
+out_root = rf"C:\Data\Research\10_Data\derivatives\dlc_superanimal\{subID}\{sesID}\{camera_view}\video-zeroshot"
 
 MEAN_CONF_THRESHOLD  = 0.6
 WORST_CONF_THRESHOLD = 0.4
