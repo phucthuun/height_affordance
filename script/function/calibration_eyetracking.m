@@ -1,6 +1,6 @@
-function calibration_eyetracking(window, screenX, screenY, ifi, log, PHONE_IP)
+function calibration_eyetracking(window, screenX, screenY, ifi, log, PHONE_IP, languageInput)
     % RUN_EYETRACKER_CALIBRATION Displays a 9-point moving dot calibration path
-    % using an existing Psychtoolbox window context.
+    % using fixed grid positions presented in random order.
 
     %% --- 1. Settings Setup ---
     SCREEN_WIDTH_M  = 2.0;
@@ -16,7 +16,6 @@ function calibration_eyetracking(window, screenX, screenY, ifi, log, PHONE_IP)
     moveDuration    = 1.0;
     fadeOutDuration = 0.5;
     margin          = 0.30;
-    useShortTravelOrder = true;
 
     % Inherit background/text colors and unified escape key mapping from your master config
     bgColor  = log.config.task.bg;
@@ -31,7 +30,7 @@ function calibration_eyetracking(window, screenX, screenY, ifi, log, PHONE_IP)
     pxPerMeter   = mean([pxPerMeter_X, pxPerMeter_Y]);
     dotDiameter  = dotDiameter_m * pxPerMeter;
 
-    %% --- 3. Calibration Coordinates Generation ---
+    %% --- 3. Fixed Calibration Coordinates Generation ---
     marginX = screenX * margin;
     marginY = screenY * margin;
 
@@ -49,18 +48,19 @@ function calibration_eyetracking(window, screenX, screenY, ifi, log, PHONE_IP)
     ];
     nPoints = size(positions, 1);
 
-    if useShortTravelOrder
-        order = [1 2 3 6 5 4 7 8 9]; % Serpentine routing trajectory
-        if rand < 0.5, order = fliplr(order); end
-    else
-        order = randperm(nPoints);
-    end
+    % Randomize the presentation order of the fixed positions
+    order = randperm(nPoints);
     orderedPositions = positions(order, :);
 
     %% --- 4. Presentation Welcome Phase ---
     Screen('TextSize', window, 30);
-    DrawFormattedText(window, log.config.task.instruction.eyetracking, 'center', 'center', log.config.task.colour.white);
-    Screen('Flip', window); lsl_send_corrected_neon_event(sprintf('Neon_calibration_start'), PHONE_IP);
+    DrawFormattedText(window, log.config.task.instruction.(sprintf('%s', languageInput)).eyetracking, 'center', 'center', log.config.task.colour.white);
+    Screen('Flip', window);
+    experimenter_message({'Communicate:',...
+                'ARE YOU READY FOR EYE-TRACKING CALIBRATION?',...
+                '(you = technician AND participant)'});
+            
+    lsl_send_corrected_neon_event(sprintf('Neon_calibration_start'), PHONE_IP);
 
     %% --- 5. Main Target Tracking Sequence Loop ---
     trailX = []; trailY = [];
