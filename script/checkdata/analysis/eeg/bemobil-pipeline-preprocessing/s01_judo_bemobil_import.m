@@ -10,8 +10,7 @@ clear; clc; close all;
 
 %% 0. LOAD CONFIGURATION
 % Make sure judo_bemobil_config.m is in your path or current directory
-run('tp_judo_bemobil_config.m');MH9HXJ
-
+run('s00_judo_bemobil_config.m');
 fprintf('============ BEMOBIL XDF IMPORT TO BIDS ============\n');
 
 %% 1. INTERACTIVE PARTICIPANT SELECTION
