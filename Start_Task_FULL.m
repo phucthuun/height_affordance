@@ -79,7 +79,7 @@ while step <= size(allSteps, 1)
                 fprintf('\nRepeating Training phase...\n');
                 continue; % Restarts the loop without incrementing 'step'
                 
-            case 'Continue to Next Task'
+            case 'Do the task FOR REAL'
                 step = step + 1; % Move forward to the next task
                 
             otherwise % 'Stop Experiment' or dialog closed
