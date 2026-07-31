@@ -12,3 +12,5 @@
 *.txt
 *.tmp
 *.xlsx
+*.DS_Store
+*.Rhistory
