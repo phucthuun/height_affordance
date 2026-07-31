@@ -3,13 +3,13 @@
 %              across Xsens kinematics, Loadsol dynamics, raw Dual-View videos, 
 %              and LSL global tracking streams. Exports frame-synchronized 
 %              BIDS derivatives (.mat, .json, .tsv, and 3 MP4 video clips per trial).
-% clear; clc; close all;
+clear; clc; close all;
 
 %% 0. BIDS Paths & Multi-Modal Run Selection
 fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
-% BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
+BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
 % DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
-BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
+% BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
 DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
 PIPELINE_NAME   = 'syncdata';
 PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
@@ -81,7 +81,8 @@ mIdx = find(cellfun(@(x) contains(x.info.name, 'Trigger', 'IgnoreCase', true) ||
                         contains(x.info.name, 'Markers', 'IgnoreCase', true), streams), 1);
 xIdx = find(cellfun(@(x) contains(x.info.name, {'LinearSegmentKinematicsDatagram1', 'LinearSegmentKinematicsDatagram2'}) ...
     && ~isempty(x.time_series) ...
-    && size(x.time_series, 1) == 207, streams), 1);
+    && size(x.time_series, 1) == 207 ...
+    && size(x.time_stamps, 2) > 3, streams), 1);
 if isempty(mIdx) || isempty(xIdx); error('Required LSL Marker or Xsens Kinematic stream elements missing inside XDF.'); end
 
 mText = streams{mIdx}.time_series(:); mTime = streams{mIdx}.time_stamps(:);
@@ -236,7 +237,7 @@ end
 %% 4. Loop and Export Trial Subsections (MAT Data & 3 Video Derivatives per Trial)
 contrastVal = 1.3; brightnessVal = 0.2; gammaExponent = 1 / 1.3; % Video processing parameters
 
-for t = 1:trialCount
+for t = 53:trialCount
     sIdx = trials(t).start_sample; eIdx = trials(t).end_sample;
     trialStartTS = trials(t).start_ts; trialEndTS = trials(t).end_ts;
     trialDuration = xTime_lsl(eIdx) - xTime_lsl(sIdx);
@@ -267,7 +268,7 @@ for t = 1:trialCount
         'event_master_timestamps', trialMarkerTimes, ...
         'event_relative_timestamps', trialMarkerTimes - xTime_lsl(sIdx) ...
     );
-    % save(outMatPath, 'syncTrialData', '-v7.3');
+    save(outMatPath, 'syncTrialData', '-v7.3');
     end % hasMvnxLoadsol (Step 6b)
 
     % --- Step 6c: Video 1 & 2 - Process and Crop Raw Camera Views (always runs: XDF + video only) ---
@@ -278,7 +279,7 @@ for t = 1:trialCount
     if has_video2
         videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoAcqLabels{end+1} = 'UpperView'; videoFrameMarkerIndices{end+1} = upperCamMarkerIdx;
     end
-
+    
     % Define the hardware video lag (10 frames)
     HARDWARE_FRAME_LAG = 10; 
     
@@ -295,14 +296,14 @@ for t = 1:trialCount
             if ~isempty(videoFrameMarkerIndices{v})
                 vFrames = streams{videoFrameMarkerIndices{v}}.time_series(:);
                 vTime   = streams{videoFrameMarkerIndices{v}}.time_stamps(:);
-                
+    
                 % Exact index in LSL stream where Neutral event occurred
                 [~, neutralLutIdx]  = min(abs(vTime - trialStartTS));
                 [~, endFrameLutIdx] = min(abs(vTime - trialEndTS));
-                
+    
                 % Physical Neutral timestamp (t = 0.00s)
                 trialStartLSLTimestamp = vTime(neutralLutIdx);
-                
+    
                 % Add +10 frames so we pull the delayed visual frame corresponding to Neutral
                 startFrame = double(vFrames(neutralLutIdx)) + HARDWARE_FRAME_LAG;
                 endFrame   = double(vFrames(endFrameLutIdx)) + HARDWARE_FRAME_LAG;
@@ -312,7 +313,7 @@ for t = 1:trialCount
                 trialStartLSLTimestamp = trialStartTS;
                 startFrame = min(reader.NumFrames, round((trialStartTS - xTime_lsl(1)) * fps) + HARDWARE_FRAME_LAG);
                 endFrame   = min(reader.NumFrames, round((trialEndTS - xTime_lsl(1)) * fps) + HARDWARE_FRAME_LAG);
-                
+    
                 vFrames = (1:reader.NumFrames)'; 
                 vTime   = (0:reader.NumFrames-1)'./fps + xTime_lsl(1);
             end
@@ -334,43 +335,43 @@ for t = 1:trialCount
             % --- 2. FRAME PROCESSING & TEXT BURNING LOOP ---
             while hasFrame(reader) && (currentFrameNum <= endFrame)
                 imgRaw = readFrame(reader);
-                
+    
                 % Map current video frame (N + 10) back to physical LSL time N
                 physicalFrameNum = currentFrameNum - HARDWARE_FRAME_LAG;
                 lslEntryIdx = find(vFrames == physicalFrameNum, 1);
                 if isempty(lslEntryIdx); [~, lslEntryIdx] = min(abs(vFrames - physicalFrameNum)); end
-            
+    
                 % Compute exact elapsed trial time relative to the Neutral event timestamp
                 globalLslTimestamp = vTime(lslEntryIdx); 
                 elapsedTrialTime   = globalLslTimestamp - trialStartLSLTimestamp;
-                
+    
                 pythonFrameIdx = lutRowIdx - 1;
                 frameLUTData(lutRowIdx, :) = [pythonFrameIdx, globalLslTimestamp, elapsedTrialTime];
-            
+    
                 % Image Color Correction
                 imgDouble = double(imgRaw) / 255.0;
                 imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
                 imgProcessed = imgProcessed .^ gammaExponent;
                 imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
                 img = uint8(imgProcessed * 255);
-            
+    
                 % Dynamic Event Lookup
                 activeIdx = find((globalLslTimestamp >= trialMarkerTimes) & ...
                                  (globalLslTimestamp <= (trialMarkerTimes + eventDisplayWindow)), 1);
-            
+    
                 % Top-Left Overlay: Frame 0 will now strictly show Time: 0.00s
                 lblText = sprintf('Trial: %03d | Frame: %d | Time: %.2fs', ...
                                   trials(t).trial_id, pythonFrameIdx, elapsedTrialTime);
                 img = insertText(img, [15, 15], lblText, 'FontSize', 18, ...
                                  'TextColor', 'white', 'BoxColor', 'black', 'BoxOpacity', 0.5);
-            
+    
                 % Top-Center Event Banner
                 if ~isempty(activeIdx)
                     eventStr = sprintf('EVENT: %s', trialMarkerTexts{activeIdx});
                     img = insertText(img, [round(reader.Width/2 - 150), 50], eventStr, ...
                                      'FontSize', 28, 'TextColor', 'red');
                 end
-            
+    
                 writeVideo(writer, img);
                 currentFrameNum = currentFrameNum + 1; 
                 lutRowIdx = lutRowIdx + 1;
@@ -393,16 +394,16 @@ for t = 1:trialCount
             fprintf('    ! Warning processing video slice [%s]: %s\n', acqLabel, ME.message);
         end
     end
-
+    
     % --- Step 6d: Video 3 - Analytical Multi-Modal Sync Plot (skipped if MVNX/Loadsol unavailable) ---
     if hasMvnxLoadsol
     plotOutPath = fullfile(OUTPUT_MOTION_DIR, [baseOutName '_desc-motion-force.mp4']);
     fig = figure('Color','k', 'Position',[50 50 1600 900], 'Visible','off');
-
+    
     ax3d = subplot(1,2,1,'Parent',fig); set(ax3d,'Color','k','XColor','w','YColor','w','ZColor','w','GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax3d,'on'); grid(ax3d,'on'); view(ax3d, 35, 20); ax3d.DataAspectRatio = [1 1 1];
     trialPos3D = master_PosData(:, sIdx:eIdx);
     xlim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); ylim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); zlim(ax3d, [0, max(trialPos3D(:),[],'omitnan')+0.2]);
-
+    
     hBones = gobjects(nBones, 1);
     for b = 1:nBones
         bname = segmentNames{bones(b,2)};
@@ -413,35 +414,35 @@ for t = 1:trialCount
     hTime = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(2)-0.05, ax3d.ZLim(2)-0.05, 't = 0.00 s','Color','w','FontSize',12,'FontWeight','bold');
     hEventLabel = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(1)+0.2, ax3d.ZLim(2)-0.05, '','Color','r','FontSize',24,'FontWeight','bold','HorizontalAlignment','left');
     title(ax3d, sprintf('Trial %03d: 3D Segment Kinematics', trials(t).trial_id), 'Color', 'w', 'FontSize', 14);
-
+    
     ax2d = subplot(1,2,2,'Parent',fig); set(ax2d,'Color','k','XColor','w','YColor','w', 'GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax2d,'on'); grid(ax2d,'on'); ylim(ax2d,[0 maxForceLimit]); xlim(ax2d, [0, 3]);
     xlabel(ax2d, 'Elapsed Trial Time (s)'); ylabel(ax2d, 'Force (N)'); title(ax2d, 'Loadsol Dynamic Force Distribution', 'Color', 'w', 'FontSize', 14);
-
+    
     tAxis = syncTrialData.elapsed_trial_time;
     hFR = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_right, '-', 'Color', rightColor, 'LineWidth', 2.0, 'DisplayName', 'Right Foot');
     hFL = plot(ax2d, tAxis, syncTrialData.loadsol_force_N_left, '-', 'Color', leftColor,  'LineWidth', 2.0, 'DisplayName', 'Left Foot');
     hVline = xline(ax2d, 0, '--','Color',[1 1 0.4],'LineWidth',1.5, 'HandleVisibility','off');
     legend(ax2d, 'show', 'TextColor', 'w', 'Color', 'k', 'Location', 'northeast');
-
+    
     vw_plot = VideoWriter(plotOutPath, 'MPEG-4'); vw_plot.FrameRate = 30; vw_plot.Quality = 90; open(vw_plot);
     frameStep = max(1, round(fs_lsl / vw_plot.FrameRate)); highlightWindowSamples = round(0.5 * fs_lsl);
-
+    
     for s = 1:frameStep:(eIdx - sIdx + 1)
         if isnan(trialPos3D(1, s)); continue; end
         globalMasterTimestamp = xTime_lsl(sIdx + s - 1);
-
+    
         currentFramePos = reshape(trialPos3D(:, s), 3, numSegments)';
         for b = 1:nBones
             p1 = bones(b,1); p2 = bones(b,2);
             set(hBones(b), 'XData', [currentFramePos(p1,1) currentFramePos(p2,1)], 'YData', [currentFramePos(p1,2) currentFramePos(p2,2)], 'ZData', [currentFramePos(p1,3) currentFramePos(p2,3)]);
         end
         set(hHead, 'XData', currentFramePos(headIdx,1), 'YData', currentFramePos(headIdx,2), 'ZData', currentFramePos(headIdx,3));
-
+    
         currentTimeVal = tAxis(s);
         set(hTime, 'String', sprintf('t = %.2f s', currentTimeVal)); hVline.Value = currentTimeVal;
-
+    
         if currentTimeVal <= 3; xlim(ax2d, [0, 3]); else; xlim(ax2d, [currentTimeVal - 3, currentTimeVal]); end
-
+    
         activeMarkerIdx = find((globalMasterTimestamp >= trialMarkerTimes) & (globalMasterTimestamp <= (trialMarkerTimes + (highlightWindowSamples / fs_lsl))), 1);
         if ~isempty(activeMarkerIdx)
             set(hEventLabel, 'String', trialMarkerTexts{activeMarkerIdx});
