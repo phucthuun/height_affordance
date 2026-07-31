@@ -1,8 +1,6 @@
 clear bemobil_config
 
 %% General Setup
-% bemobil_config.upper_folder = 'Z:\Projects\1223-xplo-judo\private\10_Data\';
-% bemobil_config.upper_folder = 'C:\Users\exp-idgrap\Desktop'
 bemobil_config.upper_folder = 'C:\Data\Research\10_Data';
 bemobil_config.raw_data_folder = fullfile(bemobil_config.upper_folder, 'sourcedata');
 bemobil_config.study_folder = fullfile(bemobil_config.upper_folder, 'derivatives', 'EEG_bemobil_pipeline');
@@ -27,16 +25,22 @@ bemobil_config.filtered_filename = 'filtered.set';
 bemobil_config.amica_filename_output = 'AMICA.set';
 bemobil_config.dipfitted_filename = 'dipfitted.set';
 bemobil_config.preprocessed_and_ICA_filename = 'preprocessed_and_ICA.set';
-% bemobil_config.preprocessed_and_rejected_ICA_filename =
-% 'preprocessed_and_rejected_ICA.set'; see script all_EGG
+bemobil_config.preprocessed_and_rejected_filename = 'preprocessed_and_rejected.set';
+bemobil_config.preprocessed_and_rejected_ICA_filename = 'preprocessed_and_rejected_ICA.set';
+bemobil_config.rejected_segments_filename = 'rejected_segments.mat';
 bemobil_config.single_subject_cleaned_ICA_filename = 'cleaned_with_ICA.set';
+
+% if a rejected_segments file already exists for a subject/session, it is loaded and re-applied automatically
+% instead of opening the interactive eegplot window again. Set this to 1 to force a new manual inspection even
+% when marks were already saved (e.g. because you want to redo the rejection).
+bemobil_config.force_manual_segment_rejection = 0;
 
 %% Preprocessing
 
 % enter channels that you did not use at all (e.g. with our custom MoBI 160 chan layout, only 157 chans are used), leave
 % empty, if all channels are used
 % process_config.channels_to_remove = {'N29' 'N30' 'N31'};
-bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
+% bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
 bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
 
 % enter EOG channel names here:
