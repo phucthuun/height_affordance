@@ -1,4 +1,10 @@
-%% Step 1B: Manual Segment Rejection (Interactive Visual Inspection)
+%% Step 2B: Manual Segment Rejection (Interactive Visual Inspection)
+%
+% Outputs: (1) the rejection marks (.mat) and 
+% (2) the resulting "preprocessed_and_rejected.set" 
+% Outputs are saved together in 3_EEG-preprocessing, 
+% next to the source "preprocessed.set". 
+
 clear; clc; close all;
 
 if ~exist('ALLCOM','var')
@@ -14,7 +20,7 @@ prompt = { ...
     'Enter Task Name (e.g., heightaffordance):', ...
     'Enter Run ID (e.g., 001):' ...
 };
-dlgtitle = 'Step 1B - Manual Rejection Selection';
+dlgtitle = 'Step 2B - Manual Rejection Selection';
 dims = [1 50];
 definput = {'MH9HXJ', 'S001', 'heightaffordance', '001'};
 userInput = inputdlg(prompt, dlgtitle, dims, definput);
@@ -27,13 +33,12 @@ taskName      = userInput{3};
 runID         = userInput{4};
 
 bids_base_string = sprintf('%s_ses-%s_task-%s_run-%s', participantID, sessionID, taskName, runID);
+
+% Preprocessed input location -- also where all outputs of this step are saved
 preprocessed_filepath = fullfile(bemobil_config.study_folder, bemobil_config.EEG_preprocessing_data_folder, ...
     [bemobil_config.filename_prefix bids_base_string]);
 
-output_filepath  = fullfile(bemobil_config.study_folder, bemobil_config.spatial_filters_folder, ...
-    bemobil_config.spatial_filters_folder_AMICA, sprintf('sub-%s', bids_base_string));
-
-if ~exist(output_filepath, 'dir'), mkdir(output_filepath); end
+if ~exist(preprocessed_filepath, 'dir'), mkdir(preprocessed_filepath); end
 
 %% 2. LOAD PREPROCESSED DATA
 preprocessed_filename = [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_filename];
@@ -58,7 +63,7 @@ end
 
 EEG_preprocessed_and_rejected = eeg_checkset(EEG);
 
-%% 4. EXTRACT & SAVE REJECTION MARKS
+%% 4. EXTRACT & SAVE REJECTION MARKS (.mat)
 boundary_idx = find(strcmp({EEG_preprocessed_and_rejected.event.type}, 'boundary'));
 reject_segments_latency = [];
 cum_removed = 0;
@@ -72,8 +77,17 @@ for b = boundary_idx
     cum_removed = cum_removed + dur;
 end
 
-rejected_segments_fullfile = fullfile(output_filepath, ...
+rejected_segments_fullfile = fullfile(preprocessed_filepath, ...
     [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.rejected_segments_filename]);
 
 save(rejected_segments_fullfile, 'reject_segments_latency');
 fprintf('\nSaved manual rejection marks to: %s\n', rejected_segments_fullfile);
+
+%% 5. SAVE PREPROCESSED AND REJECTED DATASET (.set) -- into 3_EEG-preprocessing
+rejected_set_filename = [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_and_rejected_filename];
+
+pop_saveset(EEG_preprocessed_and_rejected, ...
+    'filename', rejected_set_filename, ...
+    'filepath', preprocessed_filepath);
+
+fprintf('Saved preprocessed & rejected dataset to: %s\n', fullfile(preprocessed_filepath, rejected_set_filename));
