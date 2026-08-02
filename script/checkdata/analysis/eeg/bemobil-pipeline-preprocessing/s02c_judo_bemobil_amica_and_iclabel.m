@@ -1,5 +1,16 @@
-%% Step 1C: AMICA Training & ICLabel Artifact Rejection (Automated Batch over All Runs)
-clear; clc; close all;
+%% Step 2C: AMICA Training & ICLabel Artifact Rejection (Automated Batch over All Runs)
+%
+% Supports running AMICA + ICLabel on EITHER the plain "preprocessed" dataset,
+% the "preprocessed_and_rejected" dataset (manual segments removed in s02b), or BOTH.
+% Each mode writes to a fully separate output folder/filename set, so running both
+% never overwrites the other, and filenames always reflect what was actually used.
+
+clear; clc; close all; 
+% Force software OpenGL rendering (prevents copyobj GPU crashes)
+opengl('save', 'software'); 
+% Force figures to generate off-screen without popping up windows
+set(0, 'DefaultFigureVisible', 'off');
+
 
 if ~exist('ALLCOM','var')
     [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
@@ -15,7 +26,7 @@ prompt = { ...
     'Enter Session ID (e.g., S001):', ...
     'Enter Task Name (e.g., heightaffordance):' ...
 };
-dlgtitle = 'Step 1C - AMICA & ICLabel Batch Selection';
+dlgtitle = 'Step 2C - AMICA & ICLabel Batch Selection';
 dims = [1 50];
 definput = {'MH9HXJ', 'S001', 'heightaffordance'};
 userInput = inputdlg(prompt, dlgtitle, dims, definput);
@@ -29,15 +40,27 @@ taskName      = userInput{3};
 subEntity = sprintf('sub-%s', participantID);
 sesEntity = sprintf('ses-%s', sessionID);
 
+%% 1b. SELECT WHICH INPUT VERSION(S) TO RUN AMICA + ICLABEL ON
+mode_options = {'preprocessed  (no manual rejection)', ...
+                 'preprocessed_and_rejected  (manual segments removed in s02b)'};
+[mode_selection, ok] = listdlg('ListString', mode_options, 'SelectionMode', 'multiple', ...
+    'InitialValue', [1 2], 'Name', 'Input selection', 'ListSize', [420 80], ...
+    'PromptString', 'Run AMICA + ICLabel on which dataset(s)?');
+
+if ~ok || isempty(mode_selection), error('Processing cancelled.'); end
+
+run_modes = {};
+if any(mode_selection == 1), run_modes{end+1} = 'preprocessed'; end %#ok<AGROW>
+if any(mode_selection == 2), run_modes{end+1} = 'rejected';     end %#ok<AGROW>
+
 %% 2. AUTOMATICALLY DISCOVER ALL PREPROCESSED RUN FILES
-% Search inside the single subject analysis directory for matching preprocessed files
-analysis_folder = fullfile(bemobil_config.study_folder, bemobil_config.single_subject_analysis_folder);
+analysis_folder = fullfile(bemobil_config.study_folder, bemobil_config.EEG_preprocessing_data_folder);
 search_pattern = sprintf('%s%s_%s_task-%s_run-*_%s', ...
     bemobil_config.filename_prefix, participantID, sesEntity, taskName, bemobil_config.preprocessed_filename);
 
 run_files = dir(fullfile(analysis_folder, [bemobil_config.filename_prefix participantID '*'], search_pattern));
 
-% Fallback search across the general analysis directory if folder hierarchy differs
+% Fallback recursive search in case folder hierarchy differs (needs MATLAB R2016b+ for '**')
 if isempty(run_files)
     run_files = dir(fullfile(analysis_folder, '**', search_pattern));
 end
@@ -46,12 +69,13 @@ if isempty(run_files)
     error('No matching preprocessed run files found for subject %s in: %s', participantID, analysis_folder);
 end
 
-fprintf('\nFound %d preprocessed run file(s) to process for AMICA & ICLabel.\n', length(run_files));
+fprintf('\nFound %d preprocessed run file(s). Will process mode(s): %s\n', ...
+    length(run_files), strjoin(run_modes, ', '));
 
-%% 3. BATCH PROCESS ALL DISCOVERED RUNS
+%% 3. BATCH PROCESS ALL DISCOVERED RUNS x SELECTED MODES
 
 for r = 1:length(run_files)
-    
+
     current_preprocessed_file = run_files(r).name;
     preprocessed_filepath    = run_files(r).folder;
 
@@ -64,80 +88,96 @@ for r = 1:length(run_files)
     end
 
     bids_base_string = sprintf('%s_ses-%s_task-%s_run-%s', participantID, sessionID, taskName, runID);
-    
-    fprintf('\n==================================================\n');
-    fprintf(' Processing AMICA & ICLabel Run %d/%d: %s\n', r, length(run_files), bids_base_string);
-    fprintf('==================================================\n');
 
-    rejected_segments_filepath = fullfile(bemobil_config.study_folder, bemobil_config.spatial_filters_folder, ...
-        bemobil_config.spatial_filters_folder_AMICA, sprintf('sub-%s', bids_base_string));
+    for m = 1:length(run_modes)
+        this_mode = run_modes{m};
 
-    %% --- Load Preprocessed Data ---
-    EEG_preprocessed = pop_loadset('filename', current_preprocessed_file, 'filepath', preprocessed_filepath);
+        fprintf('\n==================================================\n');
+        fprintf(' Run %d/%d: %s  |  Mode: %s\n', r, length(run_files), bids_base_string, this_mode);
+        fprintf('==================================================\n');
 
-    %% --- Check & Apply Manual Rejection Marks (If Available) ---
-    rejected_segments_fullfile = fullfile(rejected_segments_filepath, ...
-        [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.rejected_segments_filename]);
+        %% --- Build the input EEG dataset for this mode ---
+        switch this_mode
 
-    if exist(rejected_segments_fullfile, 'file')
-        fprintf('Loading manual rejection marks from: %s\n', rejected_segments_fullfile);
-        load(rejected_segments_fullfile, 'reject_segments_latency');
-        if isempty(reject_segments_latency)
-            EEG_preprocessed_and_rejected = EEG_preprocessed;
-        else
-            EEG_preprocessed_and_rejected = eeg_eegrej(EEG_preprocessed, reject_segments_latency);
+            case 'preprocessed'
+                EEG_input = pop_loadset('filename', current_preprocessed_file, 'filepath', preprocessed_filepath);
+                mode_tag = 'raw';
+                cleaned_eyeOnly_suffix   = '_cleaned_eyeOnly.set';
+                cleaned_eyeMuscle_suffix = '_cleaned_eyeMuscle.set';
+
+            case 'rejected'
+                rejected_set_filename = [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_and_rejected_filename];
+                rejected_set_fullfile = fullfile(preprocessed_filepath, rejected_set_filename);
+
+                if exist(rejected_set_fullfile, 'file')
+                    % Preferred path: load the dataset s02b already computed and saved.
+                    fprintf('Loading manually-rejected dataset saved by s02b: %s\n', rejected_set_fullfile);
+                    EEG_input = pop_loadset('filename', rejected_set_filename, 'filepath', preprocessed_filepath);
+                else
+                    % Fallback: reconstruct by re-applying saved sample marks to a freshly
+                    % loaded preprocessed.set. Only reliable if s02a has NOT been re-run/
+                    % changed since s02b made the marks (sample indices must still match).
+                    rejected_segments_fullfile = fullfile(preprocessed_filepath, ...
+                        [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.rejected_segments_filename]);
+
+                    if ~exist(rejected_segments_fullfile, 'file')
+                        warning(['No "preprocessed_and_rejected" dataset and no rejection-mark file found for %s. ' ...
+                            'Run s02b first. Skipping "rejected" mode for this run.'], bids_base_string);
+                        continue
+                    end
+
+                    warning(['%s: no saved preprocessed_and_rejected.set found -- reconstructing from stored ' ...
+                        'sample marks instead. This assumes preprocessing has not changed since s02b was run.'], bids_base_string);
+                    EEG_input = pop_loadset('filename', current_preprocessed_file, 'filepath', preprocessed_filepath);
+                    load(rejected_segments_fullfile, 'reject_segments_latency');
+                    if ~isempty(reject_segments_latency)
+                        EEG_input = eeg_eegrej(EEG_input, reject_segments_latency);
+                    end
+                end
+                mode_tag = 'rej';
+                cleaned_eyeOnly_suffix   = '_rejected_cleaned_eyeOnly.set';
+                cleaned_eyeMuscle_suffix = '_rejected_cleaned_eyeMuscle.set';
         end
-    else
-        warning('No manual rejection file found for run %s! Running AMICA without manual segment rejection.', runID);
-        EEG_preprocessed_and_rejected = EEG_preprocessed;
-    end
 
-    %% --- Run AMICA Spatial Decomposition ---
-    amica_output_filepath = preprocessed_filepath;
-    files_before = dir(fullfile(amica_output_filepath, '*.set'));
+        %% --- Run AMICA Spatial Decomposition ---
+        % Give each mode its own bids string so bemobil_process_all_AMICA writes to a
+        % fully separate folder (sub-..._raw vs sub-..._rej) -- no filename collisions,
+        % no copy/rename workaround needed.
+        bids_base_string_mode = sprintf('%s_%s', bids_base_string, mode_tag);
 
-    [ALLEEG, EEG_preprocessed_and_rejected_ICA, CURRENTSET] = bemobil_process_all_AMICA(...
-        ALLEEG, EEG_preprocessed_and_rejected, CURRENTSET, bids_base_string, bemobil_config, force_recompute);
+        amica_output_filepath = fullfile(bemobil_config.study_folder, bemobil_config.single_subject_analysis_folder, ...
+            [bemobil_config.filename_prefix bids_base_string_mode]);
 
-    standard_ica_set = fullfile(amica_output_filepath, [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_and_ICA_filename]);
+        [ALLEEG, ~, CURRENTSET] = bemobil_process_all_AMICA(...
+            ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute);
 
-    if ~exist(standard_ica_set, 'file')
-        files_after = dir(fullfile(amica_output_filepath, '*.set'));
-        new_files = setdiff({files_after.name}, {files_before.name});
-        if numel(new_files) == 1
-            standard_ica_set = fullfile(amica_output_filepath, new_files{1});
-        else
-            error('Could not locate file written by bemobil_process_all_AMICA in %s.', amica_output_filepath);
+        % Reload from disk (matches the pattern used elsewhere in this pipeline) rather
+        % than trusting the in-memory struct returned above.
+        ica_set_filename = [bemobil_config.filename_prefix bids_base_string_mode '_' bemobil_config.preprocessed_and_ICA_filename];
+        if ~exist(fullfile(amica_output_filepath, ica_set_filename), 'file')
+            error(['Expected AMICA output not found: %s\nCheck that bemobil_process_all_AMICA saves to ' ...
+                '<single_subject_analysis_folder>/sub-<bids_base_string_mode>/ using preprocessed_and_ICA_filename, ' ...
+                'and adjust this path if your installed function differs.'], fullfile(amica_output_filepath, ica_set_filename));
         end
+        EEG_ica = pop_loadset('filename', ica_set_filename, 'filepath', amica_output_filepath);
+
+        %% --- ICLabel Artifact Rejection & Export ---
+        EEG_ica = iclabel(EEG_ica, bemobil_config.iclabel_classifier);
+
+        % Clean eye components only
+        [ALLEEG, EEG_eyeOnly, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
+            bemobil_config.iclabel_classifier, [1 2 4 5 6 7], bemobil_config.iclabel_threshold, ...
+            [bemobil_config.filename_prefix bids_base_string cleaned_eyeOnly_suffix], amica_output_filepath);
+
+        % Clean eye and muscle components
+        [ALLEEG, EEG_eyeMuscle, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
+            bemobil_config.iclabel_classifier, [1 4 5 6 7], bemobil_config.iclabel_threshold, ...
+            [bemobil_config.filename_prefix bids_base_string cleaned_eyeMuscle_suffix], amica_output_filepath);
+
     end
-
-    rejected_ica_set = fullfile(amica_output_filepath, [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_and_rejected_ICA_filename]);
-    standard_ica_fdt = strrep(standard_ica_set, '.set', '.fdt');
-    rejected_ica_fdt = strrep(rejected_ica_set, '.set', '.fdt');
-
-    copyfile(standard_ica_set, rejected_ica_set);
-    if exist(standard_ica_fdt, 'file')
-        copyfile(standard_ica_fdt, rejected_ica_fdt);
-    end
-
-    %% --- ICLabel Artifact Rejection & Export ---
-    EEG_ica = pop_loadset('filename', [bemobil_config.filename_prefix bids_base_string '_' bemobil_config.preprocessed_and_rejected_ICA_filename], ...
-        'filepath', amica_output_filepath);
-
-    EEG_ica = iclabel(EEG_ica, bemobil_config.iclabel_classifier);
-
-    % Clean eye components only
-    [ALLEEG, EEG_eyeOnly, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
-        bemobil_config.iclabel_classifier, [1 2 4 5 6 7], bemobil_config.iclabel_threshold, ...
-        [bemobil_config.filename_prefix bids_base_string '_cleaned_eyeOnly.set'], amica_output_filepath);
-
-    % Clean eye and muscle components
-    [ALLEEG, EEG_eyeMuscle, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
-        bemobil_config.iclabel_classifier, [1 4 5 6 7], bemobil_config.iclabel_threshold, ...
-        [bemobil_config.filename_prefix bids_base_string '_cleaned_eyeMuscle.set'], amica_output_filepath);
-
 end
 
 %% COMPLETE
 fprintf('\n============ AMICA & ICLABEL BATCH COMPLETE ============\n');
-fprintf('Processed all %d runs for participant %s successfully.\n', length(run_files), participantID);
+fprintf('Processed all %d run(s) x mode(s) [%s] for participant %s successfully.\n', ...
+    length(run_files), strjoin(run_modes, ', '), participantID);
