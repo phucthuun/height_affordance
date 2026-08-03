@@ -72,7 +72,7 @@ for r = 1:length(xdf_files)
     if ~exist(raw_eeglab_folder, 'dir'), mkdir(raw_eeglab_folder); end
 
     % Load XDF Stream non-interactively
-    EEG = pop_loadxdf(xdf_fullpath, 'streamname', 'EEG', 'handleJitter', 'on');
+    EEG = pop_loadxdf(xdf_fullpath, 'streamname', 'EEG');
 
     if isempty(EEG.data)
         error('EEG stream not found automatically in %s', current_xdf_name);
