@@ -40,8 +40,8 @@ bemobil_config.force_manual_segment_rejection = 0;
 % enter channels that you did not use at all (e.g. with our custom MoBI 160 chan layout, only 157 chans are used), leave
 % empty, if all channels are used
 % process_config.channels_to_remove = {'N29' 'N30' 'N31'};
-bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
-% bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
+% bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
+bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
 
 % enter EOG channel names here:
 % bemobil_config.eog_channels  = {'VEOG', 'HEOG'};
@@ -130,7 +130,7 @@ bemobil_config.filter_AMICA_lowPassOrder = [];
 % 4 threads are most effective for single subject speed, more threads don't really shorten the calculation time much.
 % best efficiency is using just 1 thread and have as many matlab instances open as possible (limited by the CPU usage).
 % Remember your RAM limit in this case.
-
+% Set AMICA executable to the universal linux binary
 bemobil_config.num_models = 1; % default 1, the number of models the AMICA will create. Currently only 1 model is supported
 bemobil_config.AMICA_autoreject = 1; % uses automatic rejection method of AMICA. no time-cleaning (manual or automatic) is needed then!
 bemobil_config.AMICA_n_rej = 10; % default 10, the number of times the rejection is performed. higher values mean stricter cleaning

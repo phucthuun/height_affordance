@@ -13,6 +13,7 @@ end
 
 run('s00_judo_bemobil_config.m');
 
+
 %% 1. USER METADATA INPUT
 prompt = { ...
     'Enter Participant ID (e.g., MH9HXJ):', ...

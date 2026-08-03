@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Array of participants to process
-PARTICIPANTS=("155T4T")
+PARTICIPANTS=("155T4T" "LINN00")
 SESSION="S001"
 TASK="heightaffordance"
 
@@ -12,9 +12,9 @@ mkdir -p logs
 sed -i 's/\r$//' *.sh 2>/dev/null
 
 for SUB in "${PARTICIPANTS[@]}"; do
-    echo "Submitting SLURM job for Subject: ${SUB}"
-    sbatch run_run_step1_to_2a.sh "${SUB}" "${SESSION}" "${TASK}"
-    
+    echo "Submitting SLURM job (step 2C: AMICA + ICLabel) for Subject: ${SUB}"
+    sbatch run_step2c.sh "${SUB}" "${SESSION}" "${TASK}"
+
     # Pause to prevent shared cache initialization collisions on cluster nodes
     sleep 1s
 done

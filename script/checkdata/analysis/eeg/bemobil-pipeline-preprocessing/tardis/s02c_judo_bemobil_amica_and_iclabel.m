@@ -17,6 +17,7 @@ run_modes = {'preprocessed', 'rejected'};
 if isunix
     opengl('save', 'software');
     set(0, 'DefaultFigureVisible', 'off');
+    set(0, 'DefaultFigurePaperPositionMode', 'auto');
 end
 
 if ~exist('ALLCOM', 'var')
@@ -162,14 +163,16 @@ for r = 1:length(run_files)
         EEG_ica = iclabel(EEG_ica, bemobil_config.iclabel_classifier);
 
         % Clean eye components only
-        [ALLEEG, ~, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
+        eyeOnly_filename = [bemobil_config.filename_prefix bids_base_string cleaned_eyeOnly_suffix];
+        [ALLEEG, ~, CURRENTSET] = safely_run_bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
             bemobil_config.iclabel_classifier, [1 2 4 5 6 7], bemobil_config.iclabel_threshold, ...
-            [bemobil_config.filename_prefix bids_base_string cleaned_eyeOnly_suffix], amica_output_filepath);
+            eyeOnly_filename, amica_output_filepath);
 
         % Clean eye and muscle components
-        [ALLEEG, ~, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
+        eyeMuscle_filename = [bemobil_config.filename_prefix bids_base_string cleaned_eyeMuscle_suffix];
+        [ALLEEG, ~, CURRENTSET] = safely_run_bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
             bemobil_config.iclabel_classifier, [1 4 5 6 7], bemobil_config.iclabel_threshold, ...
-            [bemobil_config.filename_prefix bids_base_string cleaned_eyeMuscle_suffix], amica_output_filepath);
+            eyeMuscle_filename, amica_output_filepath);
 
     end
 end
@@ -180,6 +183,11 @@ end
 
 function [ALLEEG, EEG_out, CURRENTSET] = safely_run_bemobil_process_all_AMICA(...
     ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute, amica_output_filepath)
+% Wraps bemobil_process_all_AMICA. AMICA itself, and the .set save that follows it, both
+% complete before the function tries to export a diagnostic PNG via print(gcf, ...). On this
+% platform that print() call fails even though the actual AMICA output was already written
+% to disk. If that happens, verify the expected .set file exists and continue instead of
+% aborting the whole batch; otherwise re-raise the error as usual.
 
     expected_set = fullfile(amica_output_filepath, ...
         [bemobil_config.filename_prefix bids_base_string_mode '_' bemobil_config.preprocessed_and_ICA_filename]);
@@ -188,10 +196,7 @@ function [ALLEEG, EEG_out, CURRENTSET] = safely_run_bemobil_process_all_AMICA(..
         [ALLEEG, EEG_out, CURRENTSET] = bemobil_process_all_AMICA(...
             ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute);
     catch ME
-        is_known_plot_crash = contains(ME.message, 'UI components are not supported') || ...
-            (~isempty(ME.stack) && any(strcmp({ME.stack.name}, 'print')));
-
-        if is_known_plot_crash && exist(expected_set, 'file')
+        if is_known_print_crash(ME) && exist(expected_set, 'file')
             warning(['bemobil_process_all_AMICA crashed while exporting a diagnostic PNG, ' ...
                 'but the AMICA-decomposed dataset was already saved before the crash. Continuing with: %s'], expected_set);
             EEG_out = [];
@@ -199,4 +204,40 @@ function [ALLEEG, EEG_out, CURRENTSET] = safely_run_bemobil_process_all_AMICA(..
             rethrow(ME);
         end
     end
+end
+
+
+function [ALLEEG, EEG_out, CURRENTSET] = safely_run_bemobil_clean_with_iclabel(...
+    EEG_ica, ALLEEG, CURRENTSET, classifier, classes, threshold, out_filename, out_filepath)
+% Wraps bemobil_clean_with_iclabel. This function can also try to export a diagnostic PNG
+% (e.g. "..._brain_dipoles.png") after saving the cleaned dataset, which fails on this
+% platform with "Printing of uicontrols is not supported on this platform." If the cleaned
+% .set file was already written to disk before that crash, continue instead of aborting the
+% whole batch; otherwise re-raise the error as usual.
+
+    expected_set = fullfile(out_filepath, out_filename);
+
+    try
+        [ALLEEG, EEG_out, CURRENTSET] = bemobil_clean_with_iclabel(EEG_ica, ALLEEG, CURRENTSET, ...
+            classifier, classes, threshold, out_filename, out_filepath);
+    catch ME
+        if is_known_print_crash(ME) && exist(expected_set, 'file')
+            warning(['bemobil_clean_with_iclabel crashed while exporting a diagnostic PNG, ' ...
+                'but the cleaned dataset was already saved before the crash. Continuing with: %s'], expected_set);
+            EEG_out = [];
+        else
+            rethrow(ME);
+        end
+    end
+end
+
+
+function tf = is_known_print_crash(ME)
+% Detects known headless/xvfb graphics-export crashes from print(), which can surface
+% with different wording depending on context (e.g. "not supported", or a
+% PaperPosition/resolution mismatch under xvfb).
+    keywords = {'not supported', 'unable to create output', 'paperposition', 'resolution value'};
+    msg_lower = lower(ME.message);
+    tf = any(cellfun(@(k) contains(msg_lower, k), keywords)) || ...
+        (~isempty(ME.stack) && any(ismember({ME.stack.name}, {'print', 'validate'})));
 end

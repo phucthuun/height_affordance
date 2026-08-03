@@ -4,7 +4,7 @@
 #SBATCH --error=logs/bemobil_amica_%j.err
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16GB
+#SBATCH --mem=5GB
 #SBATCH --time=12:00:00
 
 # Input parameters passed from batch submitter
@@ -21,7 +21,6 @@ module load matlab/R2023a
 chmod -R +x /mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0/plugins/
 
 echo "Starting AMICA + ICLabel (step 2C) for Subject: ${SUB_ID}, Session: ${SES_ID}, Task: ${TASK_NAME}"
-echo "Runs on BOTH preprocessed and preprocessed_and_rejected inputs (rejected inputs are skipped per-run if s02b hasn't been done yet)"
 
 # Step 3: Execute AMICA + ICLabel
 matlab -nodisplay -nosplash -batch "s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
