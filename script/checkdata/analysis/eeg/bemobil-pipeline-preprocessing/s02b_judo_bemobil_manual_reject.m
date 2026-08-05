@@ -22,7 +22,7 @@ prompt = { ...
 };
 dlgtitle = 'Step 2B - Manual Rejection Selection';
 dims = [1 50];
-definput = {'MH9HXJ', 'S001', 'heightaffordance', '001'};
+definput = {'LINN00', 'S001', 'heightaffordance', '004'};
 userInput = inputdlg(prompt, dlgtitle, dims, definput);
 
 if isempty(userInput), error('Processing cancelled.'); end

@@ -4,7 +4,7 @@
 #SBATCH --error=logs/bemobil_amica_%j.err
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=5GB
+#SBATCH --mem=16GB
 #SBATCH --time=12:00:00
 
 # Input parameters passed from batch submitter

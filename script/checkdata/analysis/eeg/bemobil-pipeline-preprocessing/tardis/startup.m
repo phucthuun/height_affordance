@@ -6,7 +6,7 @@ if exist(eeglab_path, 'dir')
     if isunix
         opengl('save', 'software');
         set(0, 'DefaultFigureVisible', 'off');
-	set(0, 'DefaultFigurePaperPositionMode', 'auto');   
+	    set(0, 'DefaultFigurePaperPositionMode', 'auto');   
     end
     % Boot EEGLAB HEADLESSLY (No GUI windows)
     [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;

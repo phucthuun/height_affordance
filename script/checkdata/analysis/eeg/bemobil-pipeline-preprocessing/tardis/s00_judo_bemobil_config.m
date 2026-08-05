@@ -40,8 +40,8 @@ bemobil_config.force_manual_segment_rejection = 0;
 % enter channels that you did not use at all (e.g. with our custom MoBI 160 chan layout, only 157 chans are used), leave
 % empty, if all channels are used
 % process_config.channels_to_remove = {'N29' 'N30' 'N31'};
-% bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
-bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
+bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
+% bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
 
 % enter EOG channel names here:
 % bemobil_config.eog_channels  = {'VEOG', 'HEOG'};

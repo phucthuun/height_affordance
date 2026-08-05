@@ -11,7 +11,7 @@
 
 `run_pipeline.sh` already chains steps 1 → 2A → 2C in one SLURM job. Since manual rejection files won't exist yet on a first run, step 2C's "rejected" pass is simply skipped per-run (with a warning) and only the "preprocessed" pass runs. Once you've done step 3 and copied the results back, you resubmit step 2C alone (`run_step2c.sh`) to also get the "rejected" pass.
 
-## Step 1–2A–2C: on the cluster
+## Step 1-2A: on the cluster
 
 SSH in and go to your script folder first:
 ```bash

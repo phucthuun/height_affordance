@@ -18,6 +18,7 @@ mkdir -p logs
 # Load required HPC modules
 . /etc/profile
 module load matlab/R2023a
+chmod -R +x /mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0/
 
 echo "Starting pipeline for Subject: ${SUB_ID}, Session: ${SES_ID}, Task: ${TASK_NAME}"
 

@@ -13,16 +13,12 @@
 %                    "rejected" mode is skipped with a warning while "preprocessed" still runs.
 function s02c_judo_bemobil_amica_and_iclabel(participantID, sessionID, taskName)
 run_modes = {'preprocessed', 'rejected'};
-
+addpath('/mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0')
 if isunix
     opengl('save', 'software');
     set(0, 'DefaultFigureVisible', 'off');
-    set(0, 'DefaultFigurePaperPositionMode', 'auto');
 end
-
-if ~exist('ALLCOM', 'var')
-    [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
-end
+[ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
 
 run('s00_judo_bemobil_config.m');
 force_recompute = 1;

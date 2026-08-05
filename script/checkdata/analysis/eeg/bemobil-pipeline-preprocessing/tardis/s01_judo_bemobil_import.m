@@ -2,7 +2,7 @@ function s01_judo_bemobil_import(participantID, sessionID, taskName)
 %% BeMoBIL XDF Import Script (HPC Tardis Version)
 % Usage:
 % matlab -batch "s01_hpc_import_xdf('MH9HXJ', 'S001', 'heightaffordance')"
-
+addpath('/mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0')
 if isunix
     opengl('save', 'software');
     set(0, 'DefaultFigureVisible', 'off');

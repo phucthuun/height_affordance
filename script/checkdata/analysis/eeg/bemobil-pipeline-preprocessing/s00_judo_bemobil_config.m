@@ -1,7 +1,7 @@
 clear bemobil_config
 
 %% General Setup
-bemobil_config.upper_folder = 'C:\Data\Research\10_Data';
+bemobil_config.upper_folder = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data';
 bemobil_config.raw_data_folder = fullfile(bemobil_config.upper_folder, 'sourcedata');
 bemobil_config.study_folder = fullfile(bemobil_config.upper_folder, 'derivatives', 'EEG_bemobil_pipeline');
 bemobil_config.filename_prefix = 'sub-';

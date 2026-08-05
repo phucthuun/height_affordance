@@ -2,17 +2,16 @@ function s02a_judo_bemobil_preprocess(participantID, sessionID, taskName)
 %% Step 2A: Preprocessing & Trimming (HPC Tardis Version)
 % Usage:
 % matlab -batch "s02a_judo_bemobil_preprocess('MH9HXJ', 'S001', 'heightaffordance')"
-
+addpath('/mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0')
 if isunix
     opengl('save', 'software');
     set(0, 'DefaultFigureVisible', 'off');
 end
-
-if ~exist('ALLCOM','var')
-    [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
-end
-
+[ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
 run('s00_judo_bemobil_config.m');
+if strcmpi(participantID, 'K2DJJ8') | strcmpi(participantID, 'MH9HXJ')
+    bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
+end
 force_recompute = 1;
 
 input_filepath = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, ...

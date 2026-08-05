@@ -5,12 +5,11 @@
 % Each mode writes to a fully separate output folder/filename set, so running both
 % never overwrites the other, and filenames always reflect what was actually used.
 
-clear; clc; close all; 
+clear; clc; close all;
 % Force software OpenGL rendering (prevents copyobj GPU crashes)
-opengl('save', 'software'); 
+opengl('save', 'software');
 % Force figures to generate off-screen without popping up windows
 set(0, 'DefaultFigureVisible', 'off');
-
 
 if ~exist('ALLCOM','var')
     [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
@@ -66,7 +65,20 @@ if isempty(run_files)
 end
 
 if isempty(run_files)
-    error('No matching preprocessed run files found for subject %s in: %s', participantID, analysis_folder);
+    existing = dir(fullfile(analysis_folder, [bemobil_config.filename_prefix participantID '*']));
+    existing = existing([existing.isdir]);
+    if isempty(existing)
+        error(['No matching preprocessed run files found for subject %s in: %s\n' ...
+            'No folders starting with "%s%s" exist there either -- check the Participant ID.'], ...
+            participantID, analysis_folder, bemobil_config.filename_prefix, participantID);
+    else
+        existing_names = strjoin({existing.name}, sprintf('\n  '));
+        error(['No matching preprocessed run files found for subject %s in: %s\n' ...
+            'Searched for session/task: "%s" / "%s"\n' ...
+            'Folders that DO exist for this participant:\n  %s\n' ...
+            '-> Check that Session ID and Task Name match one of the folders above.'], ...
+            participantID, analysis_folder, sesEntity, taskName, existing_names);
+    end
 end
 
 fprintf('\nFound %d preprocessed run file(s). Will process mode(s): %s\n', ...
@@ -148,8 +160,8 @@ for r = 1:length(run_files)
         amica_output_filepath = fullfile(bemobil_config.study_folder, bemobil_config.single_subject_analysis_folder, ...
             [bemobil_config.filename_prefix bids_base_string_mode]);
 
-        [ALLEEG, ~, CURRENTSET] = bemobil_process_all_AMICA(...
-            ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute);
+        [ALLEEG, ~, CURRENTSET] = safely_run_bemobil_process_all_AMICA(...
+            ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute, amica_output_filepath);
 
         % Reload from disk (matches the pattern used elsewhere in this pipeline) rather
         % than trusting the in-memory struct returned above.
@@ -181,3 +193,34 @@ end
 fprintf('\n============ AMICA & ICLABEL BATCH COMPLETE ============\n');
 fprintf('Processed all %d run(s) x mode(s) [%s] for participant %s successfully.\n', ...
     length(run_files), strjoin(run_modes, ', '), participantID);
+
+%% ------------------------------------------------------------------------------------
+function [ALLEEG, EEG_out, CURRENTSET] = safely_run_bemobil_process_all_AMICA(...
+    ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute, amica_output_filepath)
+% Wraps bemobil_process_all_AMICA. AMICA itself, and the .set save that follows it,
+% both complete before bemobil_process_all_AMICA tries to export a diagnostic PNG via
+% print(gcf, ...). On some MATLAB setups that print() call throws
+% "UI components are not supported..." even though the actual AMICA output was already
+% written to disk. If that happens, verify the expected .set file exists and continue
+% instead of aborting the whole batch; otherwise re-raise the error as usual.
+
+    expected_set = fullfile(amica_output_filepath, ...
+        [bemobil_config.filename_prefix bids_base_string_mode '_' bemobil_config.preprocessed_and_ICA_filename]);
+
+    try
+        [ALLEEG, EEG_out, CURRENTSET] = bemobil_process_all_AMICA(...
+            ALLEEG, EEG_input, CURRENTSET, bids_base_string_mode, bemobil_config, force_recompute);
+    catch ME
+        is_known_plot_crash = contains(ME.message, 'UI components are not supported') || ...
+            (~isempty(ME.stack) && any(strcmp({ME.stack.name}, 'print')));
+
+        if is_known_plot_crash && exist(expected_set, 'file')
+            warning(['bemobil_process_all_AMICA crashed while exporting a diagnostic PNG (a known MATLAB ' ...
+                'figure/print incompatibility), but the AMICA-decomposed dataset was already saved before the ' ...
+                'crash. Continuing with: %s'], expected_set);
+            EEG_out = [];  % not used downstream -- s02c reloads the saved .set from disk regardless
+        else
+            rethrow(ME);
+        end
+    end
+end

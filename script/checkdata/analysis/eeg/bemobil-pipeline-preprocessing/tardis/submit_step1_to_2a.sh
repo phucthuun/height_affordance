@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Array of participants to process
-PARTICIPANTS=("155T4T" "LINN00")
+PARTICIPANTS=("155T4T" "LINN00" "K2DJJ8" "MH9HXJ")
 SESSION="S001"
 TASK="heightaffordance"
 
