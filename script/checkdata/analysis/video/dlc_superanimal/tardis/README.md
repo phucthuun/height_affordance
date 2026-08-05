@@ -1,4 +1,15 @@
-# DeepLabCut / SuperAnimal pipeline — cluster split
+# DeepLabCut 2D / SuperAnimal pipeline
+
+## Install DLC environment on cluster
+
+### Tardis
+1. load the conda module with `module load conda`
+2. create the environment: `conda create -n dlc-superanimal python=3.10 -y` (this can take a while)
+4. Activate `conda activate dlc-superanimal`. 
+5. Install PyTorch with GPU (CUDA 12.6) `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126`
+6. Install DeepLabCut SuperAnimal `pip install "deeplabcut[gui,modelzoo]"`
+
+
 
 ## Which step runs where
 
