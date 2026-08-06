@@ -17,11 +17,12 @@ addpath('/mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0')
 if isunix
     opengl('save', 'software');
     set(0, 'DefaultFigureVisible', 'off');
+    set(0, 'DefaultFigureRenderer', 'painters');
 end
 [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
 
 run('s00_judo_bemobil_config.m');
-force_recompute = 1;
+force_recompute = 0;
 
 fprintf('============ BEMOBIL AMICA & ICLABEL (HPC) ============\n');
 fprintf('Participant: %s | Session: %s | Task: %s | Mode(s): %s\n', participantID, sessionID, taskName, strjoin(run_modes, ', '));

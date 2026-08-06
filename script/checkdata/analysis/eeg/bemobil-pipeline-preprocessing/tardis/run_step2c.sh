@@ -17,10 +17,10 @@ mkdir -p logs
 
 # Load required HPC modules
 . /etc/profile
-module load matlab/R2023a
+module load matlab/R2022b
 chmod -R +x /mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0/plugins/
 
 echo "Starting AMICA + ICLabel (step 2C) for Subject: ${SUB_ID}, Session: ${SES_ID}, Task: ${TASK_NAME}"
 
 # Step 3: Execute AMICA + ICLabel
-matlab -nodisplay -nosplash -batch "s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
+matlab -batch "s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
