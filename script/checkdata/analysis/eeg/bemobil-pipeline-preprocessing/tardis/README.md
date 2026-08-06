@@ -18,7 +18,6 @@
 - bemobil-pipeline2.0.1
 
 **Folder structures on tardis**
-`
 /mnt/beegfs/home/$USER
 |
 |_1223-xplo-judo 
@@ -31,7 +30,7 @@
 	   |
 	   |_bemobil-pipeline2.0.1
 	     
-`
+
 ## Step 1-2a:
 
 On tardis:
