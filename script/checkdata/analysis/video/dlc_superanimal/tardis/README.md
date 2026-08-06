@@ -10,6 +10,25 @@
 6. Install DeepLabCut SuperAnimal `pip install "deeplabcut[modelzoo]"`
 7. Go to "/mnt/beegfs/home/nguyen/.conda/envs/dlc-superanimal/lib/python3.10/site-packages/deeplabcut/modelzoo/checkpoints" --> rename file to "superanimal_humanbody_rtmpose_x.pt"
 
+### Local PC with and without GPU
+1. Install Miniforge Prompt
+2. Create and activate environment in the terminal   
+```bash
+# Create environment
+conda create -n dlc-superanimal python=3.10 -y
+# Activate the environment
+conda activate dlc-superanimal 
+```
+3. Install DLC and backends via pip
+```bash
+# with GPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# without GPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install "deeplabcut[gui,modelzoo]"
+```
+5. Launch DLC `python -m deeplabcut` (or choose the right environment on VS Code)
+
 
 ## Which step runs where
 
