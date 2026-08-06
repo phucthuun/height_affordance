@@ -1,13 +1,12 @@
 ## Overview
 
-```
-1. s01  (import XDF → BIDS)        cluster, automatic, per participant
-2. s02a (preprocessing)            cluster, automatic, per participant
-3. s02b (manual segment rejection) LOCAL PC, interactive, per run
-4. s02c (AMICA + ICLabel)          cluster, automatic, per participant
-                                    (runs on "preprocessed" immediately;
-                                     "rejected" only after step 3 is done)
-```
+| Script | Step | Machine |
+|---|---|---|
+|1. s01_judo_bemobil_import.m  	|		(import XDF → BIDS)       | 	cluster, automatic, per participant|
+|2. s02a_judo_bemobil_preprocess.m 	|	(preprocessing)            |	cluster, automatic, per participant|
+|3. s02b_judo_bemobil_manual_reject.m	|	(manual segment rejection) 	| LOCAL PC, interactive, per run|
+|4. s02c_judo_bemobil_amica_and_iclabel.m|	(AMICA + ICLabel)          |	cluster, automatic, per participant|
+                                   
 
 `run_pipeline.sh` already chains steps 1 → 2A → 2C in one SLURM job. Since manual rejection files won't exist yet on a first run, step 2C's "rejected" pass is simply skipped per-run (with a warning) and only the "preprocessed" pass runs. Once you've done step 3 and copied the results back, you resubmit step 2C alone (`run_step2c.sh`) to also get the "rejected" pass.
 
