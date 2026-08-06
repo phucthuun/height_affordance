@@ -32,8 +32,8 @@ def h5_to_video_filename(h5_filename):
 def main():
     parser = argparse.ArgumentParser(description="Zero-shot QC ranking (cluster)")
     add_common_args(parser)
-    parser.add_argument("--max-flagged", type=int, default=10,
-                         help="Max number of trials written to flagged_trials.txt [default: 10]")
+    parser.add_argument("--max-flagged", type=int, default=20,
+                         help="Max number of trials written to flagged_trials.txt [default: 20]")
     args = parser.parse_args()
 
     subID, sesID, runID, camera_view, detector_name = resolve_ids(args)

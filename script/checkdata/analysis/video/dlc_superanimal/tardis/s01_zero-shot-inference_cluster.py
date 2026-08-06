@@ -31,7 +31,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # BIDS naming: sub-<>_ses-<>_task-<>_run-<>_trial-<>_acq-<View>_beh.mp4
-    search_pattern = f"{subID}_{sesID}_task-*_{runID}_trial-*_acq-{camera_view}_desc-contrasted_beh.mp4"
+    search_pattern = f"{subID}_{sesID}_task-*_{runID}_trial-*_acq-{camera_view}_beh.mp4"
     video_files = glob.glob(os.path.join(raw_video_dir, search_pattern))
 
     if not video_files:

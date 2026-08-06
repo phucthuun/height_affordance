@@ -25,7 +25,7 @@ import re
 
 # Override with --data-root or the DLC_DATA_ROOT env var (e.g. set once in
 # your SLURM job script / ~/.bashrc on the cluster).
-DEFAULT_DATA_ROOT = os.environ.get("DLC_DATA_ROOT", "/beegfs/data/Research/10_Data")
+DEFAULT_DATA_ROOT = os.environ.get("DLC_DATA_ROOT", "/mnt/beegfs/home/nguyen/1223-xplo-judo/10_Data/")
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:

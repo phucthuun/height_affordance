@@ -6,9 +6,9 @@
 1. load the conda module with `module load conda`
 2. create the environment: `conda create -n dlc-superanimal python=3.10 -y` (this can take a while)
 4. Activate `conda activate dlc-superanimal`. 
-5. Install PyTorch with GPU (CUDA 12.6) `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126`
-6. Install DeepLabCut SuperAnimal `pip install "deeplabcut[gui,modelzoo]"`
-
+5. Install PyTorch with GPU (CUDA 12.6) `pip install "torch==2.3.1" torchvision --index-url https://download.pytorch.org/whl/cu118`
+6. Install DeepLabCut SuperAnimal `pip install "deeplabcut[modelzoo]"`
+7. Go to "/mnt/beegfs/home/nguyen/.conda/envs/dlc-superanimal/lib/python3.10/site-packages/deeplabcut/modelzoo/checkpoints" --> rename file to "superanimal_humanbody_rtmpose_x.pt"
 
 
 ## Which step runs where
@@ -30,6 +30,10 @@ with X11 forwarding this would be painful over the network for an
 interaction-heavy GUI; keep this step local.
 
 ## Workflow
+To activate environment in the terminal:
+`cd ./1223-xplo-judo/02_Task/height_affordance/script/checkdata/analysis/video/dlc_superanimal/tardis`
+`module load conda`
+`conda activate dlc-superanimal`
 
 1. `sbatch submit_s01_zeroshot.sbatch <sub> <ses> <run> <cam>` — GPU
 2. `sbatch submit_s02_s03_cpu.sbatch <sub> <ses> <run> <cam>` — CPU, chains

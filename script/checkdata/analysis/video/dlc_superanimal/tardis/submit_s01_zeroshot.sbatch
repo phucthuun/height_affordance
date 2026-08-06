@@ -2,10 +2,10 @@
 #SBATCH --job-name=dlc_s01_zeroshot
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
 #SBATCH --time=04:00:00
-#SBATCH --output=logs/s01_%j.log
+#SBATCH --output=logs/s01_zeroshot_%j.log
 
 # Usage: sbatch submit_s01_zeroshot.sbatch <sub> <ses> <run> <cam>
 # e.g.:  sbatch submit_s01_zeroshot.sbatch MH9HXJ S001 002 s
