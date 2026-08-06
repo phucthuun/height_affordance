@@ -39,6 +39,7 @@
             └── eeglab2026.0.0/
                 └── plugins/
                     └── bemobil-pipeline2.0.1/
+                            └── AMICA_processing/bemobil_clean_with_iclabel.m 	# see DEBUG 1. 
 	     
 ```
 ## Step 1-2a:
