@@ -18,19 +18,29 @@
 - bemobil-pipeline2.0.1
 
 **Folder structures on tardis**
-/mnt/beegfs/home/$USER
-|
-|_1223-xplo-judo 
-|
-|
-|_matlab
-  |______toolbox/EEGLAB/eeglab2026.0.0
-	 |
-	 |_plugins
-	   |
-	   |_bemobil-pipeline2.0.1
+```
+/mnt/beegfs/home/$USER/
+├── 1223-xplo-judo/
+│   ├── 02_Task/
+│   │   └── height_affordance/
+│   │       └── script/
+│   │           └── checkdata/
+│   │               └── analysis/
+│   │                   └── eeg/
+│   │                       └── tardis/            # MATLAB scripts and jobs
+│   │                           └── logs/          # Output messages and errors
+│   └── 10_Data/
+│       ├── sourcedata/
+│       └── derivatives/
+│           └── EEG_mobile_pipeline/
+└── matlab/
+    └── toolbox/
+        └── EEGLAB/
+            └── eeglab2026.0.0/
+                └── plugins/
+                    └── bemobil-pipeline2.0.1/
 	     
-
+```
 ## Step 1-2a:
 
 On tardis:
