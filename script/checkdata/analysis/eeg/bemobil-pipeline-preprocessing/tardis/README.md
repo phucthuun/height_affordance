@@ -12,7 +12,7 @@
 
 ## What you need
 
-**Version**
+**Version**: if it is your first time on this task, meet with Phuc
 - Matlab/2022b
 - EEGLAB 2026.0.0
 - bemobil-pipeline2.0.1
