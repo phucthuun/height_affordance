@@ -72,17 +72,18 @@ sbatch run_step2c.sh 155T4T S001 heightaffordance
 ```
 
 **Multiple participants:** edit the `PARTICIPANTS` array in `submit_step2c.sh`, then:
-```bash
+``` bash
 bash submit_step2c.sh
 ```
 
 At this point, for each run, you'll have on the cluster:
 `.../4_spatial-filters/4-1_AMICA/sub-<bids>_raw/...` AMICA+ICLabel result and `.../5_single-subject-EEG-analysis/sub-<bids>_raw/...` 
+
 ---
 
 **One thing worth knowing:** because `force_recompute = 1` is hardcoded, everything will be recomputed, even though you already have that result from the first run — it's not wasted correctness-wise, just wasted compute time. 
 
-## IMPORTANT
+## DEBUG
 
 1. Edit the code for bemobil
 
