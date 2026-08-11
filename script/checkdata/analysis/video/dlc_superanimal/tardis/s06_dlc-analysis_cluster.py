@@ -43,6 +43,7 @@ def main():
     deeplabcut.analyze_videos(config_path, all_videos, videotype=".mp4",
                                destfolder=final_out, save_as_csv=True)
     deeplabcut.filterpredictions(config_path, all_videos, destfolder=final_out)
+    deeplabcut.plot_trajectories(config_path, all_videos, videotype=".mp4", destfolder=final_out)
     deeplabcut.create_labeled_video(config_path, all_videos, destfolder=final_out, filtered=True)
     print(f"Done. Output written to: {final_out}")
 
