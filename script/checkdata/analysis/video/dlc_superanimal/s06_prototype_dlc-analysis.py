@@ -45,4 +45,5 @@ all_videos = sorted(glob.glob(os.path.join(raw_video_dir, search_pattern)))
 
 deeplabcut.analyze_videos(config_path, all_videos, videotype=".mp4", destfolder=final_out, save_as_csv=True)
 deeplabcut.filterpredictions(config_path, all_videos, destfolder=final_out)
+deeplabcut.plot_trajectories(config_path, all_videos, destfolder=final_out, showfigures=True)
 deeplabcut.create_labeled_video(config_path, all_videos, destfolder=final_out, filtered=True)
