@@ -35,30 +35,82 @@ To activate environment in the terminal:
 `module load conda`
 `conda activate dlc-superanimal`
 
-1. `sbatch submit_s01_zeroshot.sbatch <sub> <ses> <run> <cam>` — GPU
-2. `sbatch submit_s02_s03_cpu.sbatch <sub> <ses> <run> <cam>` — CPU, chains
-   QC ranking + outlier seeding, produces a fresh DLC project with
-   `machinelabels-iter*.h5` seeded per flagged trial.
+1. `sbatch submit_s01_zeroshot.sbatch <sub> <ses> all <cam>` — GPU. `all`
+   runs zero-shot inference on **every run's** videos for that
+   subject/session/camera in one job (recommended default — see "Runs are
+   pooled" below). Pass a specific run (e.g. `003`) instead if you only
+   need to (re-)process one.
+2. `sbatch submit_s02_s03_cpu.sbatch <sub> <ses> all <cam>` — CPU, chains
+   QC ranking + outlier seeding across all runs' zero-shot output, produces
+   a fresh DLC project with `machinelabels-iter*.h5` seeded per flagged
+   trial. Check the per-run flag-rate table s02 prints — it should be
+   roughly even across runs (see below), not concentrated in whichever
+   runs happen to use judogi vs. pants.
 3. **rsync the project folder to your local machine.**
 4. Run `s04_dlc-data-preparation.py` locally, cell-by-cell in VS Code /
    IPython (unchanged — still needs a live Qt loop). Save each folder's
-   corrected `CollectedData_<scorer>.h5`.
+   corrected `CollectedData_<scorer>.h5`. For any keypoint hidden under
+   clothing (e.g. an ankle swallowed by a judogi pant leg), **delete** the
+   point rather than guessing its location — DLC trains fine on missing
+   labels, but a confidently-wrong guessed label actively hurts the model.
 5. **rsync the corrected project folder back to BeeGFS.**
-6. `sbatch submit_s05_training.sbatch <sub> <ses> <run> <cam>` — GPU,
+6. `sbatch submit_s05_training.sbatch <sub> <ses> all <cam>` — GPU,
    `merge_datasets` → `create_training_dataset` → `train_network` →
-   `evaluate_network`.
-7. `sbatch submit_s06_analysis.sbatch <sub> <ses> <run> <cam>` — GPU,
-   analyzes/filters/labels the full video set.
+   `evaluate_network`. Trains one model on the pooled, multi-run labeled
+   set.
+7. `sbatch submit_s06_analysis.sbatch <sub> <ses> all <cam>` — GPU,
+   analyzes/filters/labels the full video set (already all runs,
+   regardless of what's passed for `<run>`).
+
+## Runs are pooled, not trained separately
+
+Each subject has 5 runs and may change clothing (pants in some runs, a
+judogi in others). **One pooled model per subject/session/camera_view beats
+one model per run:**
+- SuperAnimal's zero-shot + video-adaptation step (s01) already re-adapts
+  per video, so clothing differences are handled at that stage regardless
+  of pooling.
+- Fine-tuning (s05) benefits from pooling because (a) the hand-corrected
+  frame set from s04 is small — splitting it 5 ways starves each per-run
+  model of data — and (b) training on frames spanning multiple clothing
+  conditions forces the network to key off body geometry rather than
+  clothing-correlated shortcuts (e.g. "wrist = sleeve cuff"), which is
+  exactly the robustness you want across a clothing change mid-protocol.
+
+Concretely: `--run` accepts `all` (default), a single run (`003`), or a
+comma-separated list (`001,003,005`). Only **s01** uses it to choose which
+raw videos to run inference on. s02, s03, s05, and s06 always operate on
+everything already present for the subject/session/camera_view — i.e.
+pooled across every run s01 has been pointed at, regardless of what
+`--run` you pass to them. Pass `all` there for clarity; it's accepted but
+ignored.
 
 ## What changed vs. the original local scripts
 
 - **No `input()` prompts.** SLURM batch jobs have no interactive stdin, so
   every script now takes `argparse` flags (`--sub`, `--ses`, `--run`,
-  `--cam`, `--detector`, `--data-root`, `--gpu`). Defaults match the
-  originals (`run=002`, `cam=s`).
+  `--cam`, `--detector`, `--data-root`, `--gpu`). `--cam` defaults to `s`;
+  `--run` now defaults to `all` (pools every run — see "Runs are pooled"
+  above), a change from the original single-run default.
+- **Runs are pooled instead of isolated.** `--run` is a selector
+  (`all` / `002` / `001,003,005`), only consumed by s01 to pick which raw
+  videos to run zero-shot inference on. s02/s03/s05/s06 were never
+  run-scoped to begin with (they operate on everything present under the
+  subject/session/camera_view directory); that's now documented and
+  intentional rather than an inconsistency to fix, since pooling across a
+  subject's clothing changes produces a more robust trained model (see
+  above).
+- **Multi-individual QC/seeding consistency fix.** SuperAnimal's human
+  detector can pick up a bystander alongside the subject. s03 already
+  collapsed to the highest-confidence individual before seeding outlier
+  labels; s02's QC scoring didn't, so a trial's confidence score could be
+  silently averaged across multiple people. Both steps now share one
+  `select_primary_individual()` helper in `dlc_cluster_common.py` so
+  scores and seeded labels can't drift apart.
 - **Paths point at BeeGFS**, not `C:\Data\Research\...` or
   `/Users/benjes/Desktop/...`. Root is `--data-root` /
-  `$DLC_DATA_ROOT`, default `/beegfs/data/Research/10_Data` — change this to
+  `$DLC_DATA_ROOT`, default `/mnt/beegfs/home/nguyen/1223-xplo-judo/10_Data/`
+  (matches `dlc_cluster_common.py`'s `DEFAULT_DATA_ROOT`) — change this to
   your actual mount point. Layout is unified across all steps as:
   ```
   {data_root}/derivatives/syncdata/{subID}/{sesID}/video

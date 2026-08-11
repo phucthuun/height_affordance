@@ -8,6 +8,8 @@
 #SBATCH --output=logs/s06_%j.log
 
 # Usage: sbatch submit_s06_analysis.sbatch <sub> <ses> <run> <cam>
+# <run> is accepted for consistency but s06 already analyzes every video
+# under the subject/session/camera_view regardless of run. Pass "all".
 
 module load cuda anaconda3
 source activate deeplabcut

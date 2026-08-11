@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
     apply_gpu(args)
 
-    subID, sesID, runID, camera_view, detector_name = resolve_ids(args)
+    subID, sesID, camera_view, detector_name = resolve_ids(args)
     paths = paths_for(args.data_root, subID, sesID, camera_view)
     base_dir = Path(paths["dlc_root"])
     raw_video_dir = paths["raw_video_dir"]

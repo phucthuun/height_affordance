@@ -6,6 +6,14 @@
 # and each labeled-data/<trial> folder must contain a CollectedData_<scorer>.h5
 # before merge_datasets() will accept it. Sync the corrected project folder
 # from your local machine back to BeeGFS before running this.
+#
+# By design, merge_datasets()/create_training_dataset() pool labeled frames
+# from every run that made it into the DLC project (s03 seeds outliers from
+# whatever s02 flagged across all runs). This is intentional -- one model
+# per subject/session/camera_view trained on frames spanning clothing
+# changes (pants/judogi) across runs generalizes better than 5 separate
+# per-run models trained on a fraction of the labeled data each. Don't
+# split this into per-run projects unless you have a specific reason to.
 
 import argparse
 from pathlib import Path
@@ -26,7 +34,7 @@ def main():
     args = parser.parse_args()
     apply_gpu(args)
 
-    subID, sesID, runID, camera_view, detector_name = resolve_ids(args)
+    subID, sesID, camera_view, detector_name = resolve_ids(args)
     paths = paths_for(args.data_root, subID, sesID, camera_view)
     base_dir = Path(paths["dlc_root"])
 

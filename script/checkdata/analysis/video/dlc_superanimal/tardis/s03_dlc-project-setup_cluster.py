@@ -26,7 +26,7 @@ import yaml
 import deeplabcut
 from deeplabcut.utils import auxiliaryfunctions
 
-from dlc_cluster_common import add_common_args, resolve_ids, paths_for
+from dlc_cluster_common import add_common_args, resolve_ids, paths_for, select_primary_individual
 
 BODYPARTS = [
     'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
@@ -61,27 +61,6 @@ def pick_evenly(candidates, n):
         return candidates
     positions = np.linspace(0, len(candidates) - 1, n).round().astype(int)
     return sorted(set(np.array(candidates)[positions].tolist()))
-
-
-def select_primary_individual(df):
-    """Collapse a 4-level (scorer/individuals/bodyparts/coords) SuperAnimal
-    output down to 3 levels (scorer/bodyparts/coords). If >1 individual
-    appears, keep the most confident one."""
-    if "individuals" not in df.columns.names:
-        return df
-
-    individuals = df.columns.get_level_values("individuals").unique().tolist()
-    if len(individuals) == 1:
-        return df.xs(individuals[0], level="individuals", axis=1)
-
-    conf_by_ind = {}
-    for ind in individuals:
-        sub = df.xs(ind, level="individuals", axis=1)
-        lik_cols = [c for c in sub.columns if c[-1] == "likelihood"]
-        conf_by_ind[ind] = sub[lik_cols].mean().mean()
-    best = max(conf_by_ind, key=conf_by_ind.get)
-    print(f"  Multiple individuals detected {individuals}; keeping highest-confidence: {best}")
-    return df.xs(best, level="individuals", axis=1)
 
 
 def seed_outliers_from_zeroshot(config_path, video_path, zeroshot_dir,
@@ -147,7 +126,7 @@ def main():
     parser.add_argument("--project", default="heightaffordance")
     args = parser.parse_args()
 
-    subID, sesID, runID, camera_view, detector_name = resolve_ids(args)
+    subID, sesID, camera_view, detector_name = resolve_ids(args)
     paths = paths_for(args.data_root, subID, sesID, camera_view)
     config_dir = paths["dlc_root"]
     raw_video_dir = paths["raw_video_dir"]
