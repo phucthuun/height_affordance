@@ -115,10 +115,10 @@ ignored.
 - **Paths**: Root is save in dlc_cluster_common.py / --data-root / $DLC_DATA_ROOT, 
 default /mnt/beegfs/home/nguyen/1223-xplo-judo/10_Data/ — change this to your actual mount point. Layout is unified across all steps as:
   ```
-  {data_root}/derivatives/syncdata/{subID}/{sesID}/video
-  {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/video-zeroshot
-  {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/video-estimation
-  {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/heightaffordance-*/
+  unlabeled video : {data_root}/derivatives/syncdata/{subID}/{sesID}/video
+  zeroshot video  : {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/video-zeroshot
+  estimated video : {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/video-estimation
+  dlc project     : {data_root}/derivatives/dlc_superanimal/{subID}/{sesID}/{camera_view}/heightaffordance-*/
   ```
 
 - **Detector defaults to `fasterrcnn_resnet50_fpn_v2`** (the old
