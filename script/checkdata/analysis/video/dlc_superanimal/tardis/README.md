@@ -82,11 +82,9 @@ conda activate dlc-superanimal
 4. Run `s04_dlc-data-preparation.py` locally, cell-by-cell in VS Code /
    IPython. Save each folder's corrected `CollectedData_<scorer>.h5`. 
 5. **copy the corrected project folder back to tardis.**
-6. `sbatch submit_s05_training.sbatch <sub> <ses> all <cam>` — GPU,
+6. `sbatch submit_s05_s06_train_analyze <sub> <ses> all <cam>` — GPU,
    `merge_datasets` → `create_training_dataset` → `train_network` →
-   `evaluate_network`.
-7. `sbatch submit_s06_analysis.sbatch <sub> <ses> all <cam>` — GPU,
-   analyzes/filters/labels the full video set regardless of runs.
+   `evaluate_network`. Then analyzes/filters/plot trajectories/labels all videos regardless of runs.
 
 ## Some explanations
 
