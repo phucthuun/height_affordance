@@ -50,10 +50,11 @@ interaction-heavy GUI; keep this step local.
 
 ## Workflow
 To activate environment in the terminal:
-`cd ./1223-xplo-judo/02_Task/height_affordance/script/checkdata/analysis/video/dlc_superanimal/tardis`
-`module load conda`
-`conda activate dlc-superanimal`
-
+```bash
+cd ./1223-xplo-judo/02_Task/height_affordance/script/checkdata/analysis/video/dlc_superanimal/tardis
+module load conda
+conda activate dlc-superanimal
+```
 1. `sbatch submit_s01_zeroshot.sbatch <sub> <ses> <run> <cam>` — GPU
 2. `sbatch submit_s02_s03_cpu.sbatch <sub> <ses> <run> <cam>` — CPU, chains
    QC ranking + outlier seeding, produces a fresh DLC project with
