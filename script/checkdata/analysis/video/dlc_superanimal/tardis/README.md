@@ -16,6 +16,7 @@ for cluster specs and login details.
 5. Install PyTorch with GPU (CUDA 12.6) `pip install "torch==2.3.1" torchvision --index-url https://download.pytorch.org/whl/cu118`
 6. Install DeepLabCut SuperAnimal `pip install "deeplabcut[modelzoo]"`
 7. Go to "/mnt/beegfs/home/nguyen/.conda/envs/dlc-superanimal/lib/python3.10/site-packages/deeplabcut/modelzoo/checkpoints" --> rename file to "superanimal_humanbody_rtmpose_x.pt"
+8. Go to "dlc_superanimal\tardis" where this readme resides --> create a subfolder `logs`
 
 ### Local PC with and without GPU
 1. Install Miniforge Prompt
@@ -82,7 +83,7 @@ conda activate dlc-superanimal
 4. Run `s04_dlc-data-preparation.py` locally, cell-by-cell in VS Code /
    IPython. Save each folder's corrected `CollectedData_<scorer>.h5`. 
 5. **copy the corrected project folder back to tardis.**
-6. `sbatch submit_s05_s06_train_analyze <sub> <ses> all <cam>` — GPU,
+6. `sbatch submit_s05_s06_train_analyze.sbatch <sub> <ses> all <cam>` — GPU,
    `merge_datasets` → `create_training_dataset` → `train_network` →
    `evaluate_network`. Then analyzes/filters/plot trajectories/labels all videos regardless of runs.
 
