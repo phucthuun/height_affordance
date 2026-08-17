@@ -2,9 +2,9 @@
 #SBATCH --job-name=dlc_s05_train_s06_analyze
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8G
+#SBATCH --time=6:00:00
 #SBATCH --output=logs/s05_s06_%j.log
 
 # Usage: sbatch submit_s05_s06_train_analyze.sbatch <sub> <ses> <run> <cam>
