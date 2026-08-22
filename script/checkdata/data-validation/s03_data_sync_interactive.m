@@ -7,9 +7,7 @@ clear; clc; close all;
 
 %% 0. BIDS Paths & Multi-Modal Run Selection
 fprintf('============ BIDS UNIFIED MULTI-MODAL SYNCHRONIZER & SLICER ============ \n');
-BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
-% DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
-% BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
+BASE_LOC        = 'C:\Data\Research\10_Data\sourcedata';
 DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
 PIPELINE_NAME   = 'syncdata';
 PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
@@ -49,10 +47,6 @@ mvnxDirStruct  = dir(fullfile(MOCAP_DIR, [search_prefix '*.mvnx']));
 forceDirStruct = dir(fullfile(FORCE_DIR, [search_prefix '*.txt']));
 
 if ~exist(fullXdfPath, 'file'), error('Missing master timeline trace XDF: %s', fullXdfPath); end
-% NOTE: Missing/corrupt MVNX or Loadsol files are NOT hard errors here.
-% They are checked inside the try/catch in Section 3 below, so that if
-% XDF + at least one video view are still available, you get the option
-% to debug or continue with a video-only (no kinematics/force) export.
 
 % --- Automatically Locate Available Video Views ---
 view1Struct = dir(fullfile(VIDEO_DIR, [search_prefix '*acq-SideView_beh.avi']));
@@ -66,8 +60,8 @@ if ~exist(descJsonPath, 'file')
         'Name', 'BIDS Video Slicing and Multi-Modal Synchronization Pipeline', ...
         'BIDSVersion', '1.11.1', ...
         'DatasetType', 'derivative', ...
-        'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.0.0', ...
-                        'Description', 'Unifies and slices kinematics, forces, and multi-view video feeds into BIDS structures.')}}, ...
+        'GeneratedBy', {{struct('Name', 'MATLAB Integrated Synchronizer Script', 'Version', '3.1.0', ...
+                        'Description', 'Unifies and slices kinematics, forces, CoM, and multi-view video feeds into BIDS structures.')}}, ...
         'SourceDatasets', {{struct('Description', 'Local project workspace raw BIDS baseline tracking streams')}} ...
     );
     fid = fopen(descJsonPath, 'w'); fprintf(fid, '%s', jsonencode(descStruct, 'PrettyPrint', true)); fclose(fid);
@@ -90,13 +84,12 @@ xData_lsl = double(streams{1,xIdx}.time_series); xTime_lsl = streams{1,xIdx}.tim
 fs_lsl = str2double(streams{xIdx}.info.nominal_srate);
 if isnan(fs_lsl) || fs_lsl == 0; fs_lsl = 1 / mean(diff(xTime_lsl)); end
 
-% Optional: Locate Video FrameMarker Streams for exact frame-to-timestamp lookup mapping
 sideCamMarkerIdx  = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_1'), streams), 1);
 upperCamMarkerIdx = find(cellfun(@(x) strcmp(x.info.name, 'FrameMarker_0'), streams), 1);
 
 totalMasterSamples = length(xTime_lsl);
 
-%% 2. Reconstruct & Segment Trial Timelines (XDF-only, independent of MVNX/Loadsol)
+%% 2. Reconstruct & Segment Trial Timelines
 trials = struct('trial_id', {}, 'start_sample', {}, 'end_sample', {}, 'start_ts', {}, 'end_ts', {});
 trialCount = 0; activeTrialStartTS = [];
 for i = 1:numel(mText)
@@ -131,10 +124,20 @@ fprintf('Parsing reprocessed MVNX structural frame elements...\n');
 tree = load_mvnx(fullMvnxPath);
 frameRate_mvnx = str2num(tree.metaData.subject_frameRate); numSegments = str2num(tree.metaData.subject_segmentCount); nSamples_mvnx = length(tree.frame);
 segmentNames = cell(numSegments, 1); for s = 1:numSegments; segmentNames{s} = tree.segmentData(s).label; end
+
+% --- Extract Segment Positions AND Center of Mass ---
 mvnx_allPos = zeros(numSegments * 3, nSamples_mvnx);
+mvnx_centerOfMass = zeros(9, nSamples_mvnx); % Contains [pos_x y z, vel_x y z, acc_x y z]
+
 for i = 1:numSegments
     if isfield(tree.segmentData(i), 'position') && ~isempty(tree.segmentData(i).position)
         mvnx_allPos(3*i-2:3*i, :) = tree.segmentData(i).position';
+    end
+end
+
+for f = 1:nSamples_mvnx
+    if isfield(tree.frame(f), 'centerOfMass') && ~isempty(tree.frame(f).centerOfMass)
+        mvnx_centerOfMass(:, f) = tree.frame(f).centerOfMass;
     end
 end
 
@@ -183,16 +186,26 @@ pulseIdx = find(([0; diff(loadsol.ttl > thresh)] == 1), 1, 'first');
 t0_loadsol = 0; if ~isempty(pulseIdx); t0_loadsol = loadsol.ttl_t(pulseIdx); end
 loadsol_aligned_time = loadsol.time - t0_loadsol;
 
-master_PosData = zeros(numSegments * 3, totalMasterSamples); master_ForceR = zeros(1, totalMasterSamples); master_ForceL = zeros(1, totalMasterSamples);
+master_PosData = zeros(numSegments * 3, totalMasterSamples); 
+master_CoMData = zeros(9, totalMasterSamples);
+master_ForceR  = zeros(1, totalMasterSamples); 
+master_ForceL  = zeros(1, totalMasterSamples);
+
 for t = 1:totalMasterSamples
     [mvnxDiff, closestMvnxIdx] = min(abs(mvnx_sync_time - xTime_lsl(t)));
-    if mvnxDiff > (1 / frameRate_mvnx) * 2; master_PosData(:, t) = NaN; else; master_PosData(:, t) = mvnx_allPos(:, closestMvnxIdx); end
+    if mvnxDiff > (1 / frameRate_mvnx) * 2
+        master_PosData(:, t) = NaN; 
+        master_CoMData(:, t) = NaN;
+    else
+        master_PosData(:, t) = mvnx_allPos(:, closestMvnxIdx); 
+        master_CoMData(:, t) = mvnx_centerOfMass(:, closestMvnxIdx);
+    end
     relative_mTime = xTime_lsl(t) - (xTime_lsl(1) + time_lag_seconds);
     [loadsolDiff, closestLsIdx] = min(abs(loadsol_aligned_time - relative_mTime));
     if loadsolDiff > 0.02; master_ForceR(t) = NaN; master_ForceL(t) = NaN; else; master_ForceR(t) = loadsol.right(closestLsIdx); master_ForceL(t) = loadsol.left(closestLsIdx); end
 end
 
-% --- Setup Graphic Visualizer Configuration (needs MVNX segment labels) ---
+% --- Setup Graphic Visualizer Configuration ---
 idx_match = @(name) find(contains(segmentNames, name, 'IgnoreCase', true), 1);
 boneDefs = {'Pelvis','L5'; 'L5','L3'; 'L3','T12'; 'T12','T8'; 'T8','Neck'; 'Neck','Head'; 'T8','RightShoulder'; 'RightShoulder','RightUpperArm'; 'RightUpperArm','RightForeArm'; 'RightForeArm','RightHand'; 'T8','LeftShoulder'; 'LeftShoulder','LeftUpperArm'; 'LeftUpperArm','LeftForeArm'; 'LeftForeArm','LeftHand'; 'Pelvis','RightUpperLeg'; 'RightUpperLeg','RightLowerLeg'; 'RightLowerLeg','RightFoot'; 'RightFoot','RightToe'; 'Pelvis','LeftUpperLeg'; 'LeftUpperLeg','LeftLowerLeg'; 'LeftLowerLeg','LeftFoot'; 'LeftFoot','LeftToe';};
 bones = zeros(size(boneDefs,1), 2); for b = 1:size(boneDefs,1); bones(b,1) = idx_match(boneDefs{b,1}); bones(b,2) = idx_match(boneDefs{b,2}); end
@@ -208,36 +221,31 @@ catch ME
     if haveFallback
         choice = questdlg( ...
             sprintf(['An error occurred while loading/processing MVNX or Loadsol data:\n\n%s\n\n' ...
-                      'XDF and at least one video view ARE available, so trials can still be ' ...
-                      'timed from the XDF markers and camera video can still be sliced.\n\n' ...
-                      'Debug   = pause here (MATLAB debugger) so you can inspect variables now.\n' ...
+                      'XDF and at least one video view ARE available.\n\n' ...
+                      'Debug   = pause here (MATLAB debugger).\n' ...
                       'Continue = skip kinematics/force outputs and export sliced camera video only.\n' ...
                       'Abort   = stop the script entirely.'], ME.message), ...
             'MVNX/Loadsol Error', 'Debug', 'Continue (video-only)', 'Abort', 'Continue (video-only)');
     else
-        fprintf(2, 'No XDF/video fallback available (missing streams or no video views found) - aborting.\n');
+        fprintf(2, 'No XDF/video fallback available - aborting.\n');
         choice = 'Abort';
     end
 
     switch choice
         case 'Debug'
-            fprintf(['Entering debug mode at the point of failure.\n' ...
-                      'Inspect/fix variables as needed, then type "dbcont" to resume or "dbquit" to exit.\n' ...
-                      'Note: resuming with dbcont will still stop the script after this point, since the ' ...
-                      'underlying MVNX/Loadsol error is not automatically retried.\n']);
             keyboard; %#ok<KBEK>
             rethrow(ME);
         case 'Continue (video-only)'
-            fprintf('Continuing WITHOUT MVNX/Loadsol data. Only sliced camera video(s) will be exported per trial.\n');
+            fprintf('Continuing WITHOUT MVNX/Loadsol data. Only sliced camera video(s) will be exported.\n');
         otherwise
             rethrow(ME);
     end
 end
 
-%% 4. Loop and Export Trial Subsections (MAT Data & 3 Video Derivatives per Trial)
-contrastVal = 1.3; brightnessVal = 0.2; gammaExponent = 1 / 1.3; % Video processing parameters
+%% 4. Loop and Export Trial Subsections
+contrastVal = 1.3; brightnessVal = 0.2; gammaExponent = 1 / 1.3;
 
-for t = 53:trialCount
+for t = 1:trialCount
     sIdx = trials(t).start_sample; eIdx = trials(t).end_sample;
     trialStartTS = trials(t).start_ts; trialEndTS = trials(t).end_ts;
     trialDuration = xTime_lsl(eIdx) - xTime_lsl(sIdx);
@@ -254,7 +262,7 @@ for t = 53:trialCount
         if contains(trialMarkerTexts{m}, 'Neu', 'IgnoreCase', true); trialMarkerTexts{m} = 'Neutral'; end
     end
     
-    % --- Step 6b: Save Unified MAT Payload Matrix (skipped if MVNX/Loadsol unavailable) ---
+    % --- Step 6b: Save Unified MAT Payload Matrix (Now Includes center_of_mass) ---
     if hasMvnxLoadsol
     syncTrialData = struct(...
         'trial_id', trials(t).trial_id, ...
@@ -262,6 +270,7 @@ for t = 53:trialCount
         'elapsed_trial_time', xTime_lsl(sIdx:eIdx) - xTime_lsl(sIdx), ...
         'xsens_segment_labels', {segmentNames}, ...
         'xsens_positions_3D', master_PosData(:, sIdx:eIdx), ...
+        'center_of_mass', master_CoMData(:, sIdx:eIdx), ... % 9xN: [pos_xyz; vel_xyz; acc_xyz]
         'loadsol_force_N_right', master_ForceR(sIdx:eIdx), ...
         'loadsol_force_N_left', master_ForceL(sIdx:eIdx), ...
         'event_marker_strings', {trialMarkerTexts}, ...
@@ -269,9 +278,9 @@ for t = 53:trialCount
         'event_relative_timestamps', trialMarkerTimes - xTime_lsl(sIdx) ...
     );
     save(outMatPath, 'syncTrialData', '-v7.3');
-    end % hasMvnxLoadsol (Step 6b)
+    end
 
-    % --- Step 6c: Video 1 & 2 - Process and Crop Raw Camera Views (always runs: XDF + video only) ---
+    % --- Step 6c: Video 1 & 2 - Process and Crop Raw Camera Views ---
     videoViewsToSlice = {}; videoAcqLabels = {}; videoFrameMarkerIndices = {};
     if has_video1
         videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view1Struct(1).name); videoAcqLabels{end+1} = 'SideView'; videoFrameMarkerIndices{end+1} = sideCamMarkerIdx;
@@ -279,7 +288,6 @@ for t = 53:trialCount
     if has_video2
         videoViewsToSlice{end+1} = fullfile(VIDEO_DIR, view2Struct(1).name); videoAcqLabels{end+1} = 'UpperView'; videoFrameMarkerIndices{end+1} = upperCamMarkerIdx;
     end
-    
     % Define the hardware video lag (10 frames)
     HARDWARE_FRAME_LAG = 10; 
     
@@ -291,19 +299,19 @@ for t = 53:trialCount
             outVideoPath   = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh']);
             outSidecarPath = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_beh.json']);
             outLutPath     = fullfile(OUTPUT_VIDEO_DIR, [baseOutName '_acq-' acqLabel '_desc-frameLUT_beh.tsv']);
-    
+
             % --- 1. RESOLVE FRAME INDEXES WITH HARDWARE LAG COMPENSATION ---
             if ~isempty(videoFrameMarkerIndices{v})
                 vFrames = streams{videoFrameMarkerIndices{v}}.time_series(:);
                 vTime   = streams{videoFrameMarkerIndices{v}}.time_stamps(:);
-    
+
                 % Exact index in LSL stream where Neutral event occurred
                 [~, neutralLutIdx]  = min(abs(vTime - trialStartTS));
                 [~, endFrameLutIdx] = min(abs(vTime - trialEndTS));
-    
+
                 % Physical Neutral timestamp (t = 0.00s)
                 trialStartLSLTimestamp = vTime(neutralLutIdx);
-    
+
                 % Add +10 frames so we pull the delayed visual frame corresponding to Neutral
                 startFrame = double(vFrames(neutralLutIdx)) + HARDWARE_FRAME_LAG;
                 endFrame   = double(vFrames(endFrameLutIdx)) + HARDWARE_FRAME_LAG;
@@ -317,7 +325,6 @@ for t = 53:trialCount
                 vFrames = (1:reader.NumFrames)'; 
                 vTime   = (0:reader.NumFrames-1)'./fps + xTime_lsl(1);
             end
-    
             % Ensure frame bounds remain within raw video file boundaries
             if startFrame < 1; startFrame = 1; end
             if endFrame > reader.NumFrames; endFrame = reader.NumFrames; end
@@ -330,12 +337,11 @@ for t = 53:trialCount
             frameLUTData = zeros(totalFramesInTrial, 3); 
             lutRowIdx = 1;
     
-            eventDisplayWindow = 0.5; % Display event text for 0.5s
-    
+            eventDisplayWindow = 0.5;
             % --- 2. FRAME PROCESSING & TEXT BURNING LOOP ---
             while hasFrame(reader) && (currentFrameNum <= endFrame)
                 imgRaw = readFrame(reader);
-    
+
                 % Map current video frame (N + 10) back to physical LSL time N
                 physicalFrameNum = currentFrameNum - HARDWARE_FRAME_LAG;
                 lslEntryIdx = find(vFrames == physicalFrameNum, 1);
@@ -395,13 +401,15 @@ for t = 53:trialCount
         end
     end
     
-    % --- Step 6d: Video 3 - Analytical Multi-Modal Sync Plot (skipped if MVNX/Loadsol unavailable) ---
+    % --- Step 6d: Video 3 - Analytical Multi-Modal Sync Plot (Renders Kinematics + CoM) ---
     if hasMvnxLoadsol
     plotOutPath = fullfile(OUTPUT_MOTION_DIR, [baseOutName '_desc-motion-force.mp4']);
     fig = figure('Color','k', 'Position',[50 50 1600 900], 'Visible','off');
     
     ax3d = subplot(1,2,1,'Parent',fig); set(ax3d,'Color','k','XColor','w','YColor','w','ZColor','w','GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax3d,'on'); grid(ax3d,'on'); view(ax3d, 35, 20); ax3d.DataAspectRatio = [1 1 1];
     trialPos3D = master_PosData(:, sIdx:eIdx);
+    trialCoM3D = master_CoMData(1:3, sIdx:eIdx); % Extract 3D position components (x, y, z)
+    
     xlim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); ylim(ax3d, [min(trialPos3D(:),[],'omitnan')-0.2, max(trialPos3D(:),[],'omitnan')+0.2]); zlim(ax3d, [0, max(trialPos3D(:),[],'omitnan')+0.2]);
     
     hBones = gobjects(nBones, 1);
@@ -411,9 +419,14 @@ for t = 53:trialCount
         hBones(b) = plot3(ax3d, [0 0],[0 0],[0 0], '-o','Color',col,'LineWidth',2.5,'MarkerFaceColor',col);
     end
     hHead = plot3(ax3d, 0,0,0, 'o', 'MarkerSize',12,'MarkerFaceColor',[1 0.85 0.6], 'MarkerEdgeColor','w');
+    
+    % Visual Elements for Center of Mass
+    hCoM      = plot3(ax3d, 0,0,0, 'p', 'MarkerSize',14,'MarkerFaceColor','yellow','MarkerEdgeColor','k', 'DisplayName', 'Center of Mass');
+    hCoMTrace = plot3(ax3d, NaN, NaN, NaN, ':', 'Color', [1 1 0 0.6], 'LineWidth', 1.5, 'HandleVisibility', 'off');
+    
     hTime = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(2)-0.05, ax3d.ZLim(2)-0.05, 't = 0.00 s','Color','w','FontSize',12,'FontWeight','bold');
     hEventLabel = text(ax3d, ax3d.XLim(1)+0.05, ax3d.YLim(1)+0.2, ax3d.ZLim(2)-0.05, '','Color','r','FontSize',24,'FontWeight','bold','HorizontalAlignment','left');
-    title(ax3d, sprintf('Trial %03d: 3D Segment Kinematics', trials(t).trial_id), 'Color', 'w', 'FontSize', 14);
+    title(ax3d, sprintf('Trial %03d: 3D Kinematics & CoM', trials(t).trial_id), 'Color', 'w', 'FontSize', 14);
     
     ax2d = subplot(1,2,2,'Parent',fig); set(ax2d,'Color','k','XColor','w','YColor','w', 'GridColor',[0.3 0.3 0.3],'GridAlpha',0.4); hold(ax2d,'on'); grid(ax2d,'on'); ylim(ax2d,[0 maxForceLimit]); xlim(ax2d, [0, 3]);
     xlabel(ax2d, 'Elapsed Trial Time (s)'); ylabel(ax2d, 'Force (N)'); title(ax2d, 'Loadsol Dynamic Force Distribution', 'Color', 'w', 'FontSize', 14);
@@ -438,6 +451,11 @@ for t = 53:trialCount
         end
         set(hHead, 'XData', currentFramePos(headIdx,1), 'YData', currentFramePos(headIdx,2), 'ZData', currentFramePos(headIdx,3));
     
+        % Update CoM Current Position and Trajectory Trace
+        currentCoM = trialCoM3D(:, s);
+        set(hCoM, 'XData', currentCoM(1), 'YData', currentCoM(2), 'ZData', currentCoM(3));
+        set(hCoMTrace, 'XData', trialCoM3D(1, 1:s), 'YData', trialCoM3D(2, 1:s), 'ZData', trialCoM3D(3, 1:s));
+    
         currentTimeVal = tAxis(s);
         set(hTime, 'String', sprintf('t = %.2f s', currentTimeVal)); hVline.Value = currentTimeVal;
     
@@ -454,8 +472,9 @@ for t = 53:trialCount
         drawnow limitrate; writeVideo(vw_plot, getframe(fig));
     end
     close(vw_plot); close(fig);
-    end % hasMvnxLoadsol (Step 6d)
+    end
 end
+
 if hasMvnxLoadsol
     fprintf('\n Batch execution finalized. Payloads saved to %s and multi-view diagnostics exported to %s.\n', OUTPUT_MOTION_DIR, OUTPUT_VIDEO_DIR);
 else
