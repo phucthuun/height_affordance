@@ -73,7 +73,7 @@ def main():
         model_name="rtmpose_x",
         detector_name=detector_name,
         dest_folder=output_dir,
-        video_adapt=True,
+        video_adapt=False,
     )
     print(f"Done. Output written to: {output_dir}")
 
