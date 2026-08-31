@@ -17,6 +17,8 @@
 module load cuda anaconda3          # adjust to your cluster's module names
 source activate deeplabcut          # conda env with deeplabcut + torch(cuda) installed
 
+EXPERIMENTER="${5:-Phuc}"
+
 python s01_zero-shot-inference_cluster.py \
     --sub "$1" --ses "$2" --run "$3" --cam "$4" \
     --detector resnet50

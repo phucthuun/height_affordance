@@ -55,8 +55,8 @@ def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
                               "inference) uses this to choose which raw videos to process; "
                               "s02/s03/s05/s06 always operate on everything already present "
                               "for the subject/session/camera_view (i.e. pooled).")
-    parser.add_argument("--cam", choices=["s", "u"], default="s",
-                         help="'s' = SideView, 'u' = UpperView [default: s]")
+    parser.add_argument("--cam", choices=["s", "u", "g"], default="s",
+                         help="'s' = SideView, 'u' = UpperView, 'g' = GroundView [default: s]")
     parser.add_argument("--detector", choices=["mobilenet", "resnet50"], default="resnet50",
                          help="Detector backbone. Cluster GPUs default to the heavier "
                               "resnet50; use 'mobilenet' only if you need to match a "
@@ -77,14 +77,20 @@ def resolve_ids(args):
 
     subID = f"sub-{subLabel}"
     sesID = f"ses-{sesLabel}"
-    camera_view = "UpperView" if args.cam == "u" else "SideView"
+    
+    view_map = {
+        "u": "UpperView",
+        "g": "GroundView",
+        "s": "SideView"
+    }
+    camera_view = view_map.get(args.cam, "SideView")
+
     detector_name = ("fasterrcnn_resnet50_fpn_v2" if args.detector == "resnet50"
                       else "fasterrcnn_mobilenet_v3_large_fpn")
 
     print(f" -> {subID} | {sesID} | Run selection: {args.run} | View: {camera_view} | "
           f"Detector: {detector_name}")
     return subID, sesID, camera_view, detector_name
-
 
 def resolve_run_ids(args):
     """Turn --run ('all' | '002' | '001,003,005') into either None (meaning

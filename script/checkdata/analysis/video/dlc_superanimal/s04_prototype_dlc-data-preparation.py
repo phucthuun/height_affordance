@@ -26,9 +26,9 @@ import re
 from pathlib import Path
 import deeplabcut
 # Enter the subject/session/run/camera view you want to refine labels for.
-subID = "sub-Maximilian"    # "sub-{subLabel}"
+subID = "sub-155T4T"    # "sub-{subLabel}"
 sesID = "ses-S001"          # "ses-{sesLabel}"
-camera_view = "SideView"    # "UpperView" or "SideView"
+camera_view = "UpperView"    # "UpperView" or "SideView"
 
 # Base directory where heightaffordance-* project subfolder lives
 base_dir = Path(rf"C:\Data\Research\10_Data\derivatives\dlc_superanimal\{subID}\{sesID}\{camera_view}")
