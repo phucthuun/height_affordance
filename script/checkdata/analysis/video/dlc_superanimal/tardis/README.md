@@ -89,6 +89,14 @@ conda activate dlc-superanimal
 
 ## Some explanations
 
+-**Camera views**
+
+Three options for camera view are: 
+- `s`: SideView, likely captures mostly participant's face and right side
+- `u`: UpperView, captures from top-down
+- `g`: GroundView, likely captures mostly participant's back and left side  
+
+
 -**Runs are pooled, not trained separately**
 
 Each subject has 5 runs and may change clothing (no judo pants in some runs, a
