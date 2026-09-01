@@ -66,8 +66,9 @@ conda activate dlc-superanimal
 
 1. `sbatch submit_s01_zeroshot.sbatch <sub> <ses> all <cam>` — GPU. `all`
    runs zero-shot inference on **every run's** videos for that
-   subject/session/camera in one job (recommended default — see "Runs are
-   pooled" below). Pass a specific run (e.g. `S003`) instead if you only
+   subject/session/camera in one job, , e.g.
+   `sbatch submit_s01_zeroshot.sbatch MH9HXJ S001 all s` (recommended default — see "Runs are
+   pooled" below). Pass a specific run (e.g. `003`) instead if you only
    need to (re-)process one.
 2. `sbatch submit_s02_s03_cpu.sbatch <sub> <ses> all <cam> [experimenter]` —
    CPU, chains QC ranking + outlier seeding across all runs' zero-shot
