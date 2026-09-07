@@ -7,7 +7,7 @@ clear; clc; close all;
 %% 0. BIDS Paths & Setup
 fprintf('============ BIDS TRI-CAMERA VIDEO SYNCHRONIZER & SLICER ============ \n');
 BASE_LOC        = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\sourcedata';
-DERIVATIVES_LOC = 'C:\Data\Research\10_Data\derivatives';
+DERIVATIVES_LOC = '\\mpib-berlin.mpg.de\Share\Projects\1223-xplo-judo\private\10_Data\derivatives';
 PIPELINE_NAME   = 'syncdata';
 PIPELINE_ROOT   = fullfile(DERIVATIVES_LOC, PIPELINE_NAME);
 
@@ -90,7 +90,7 @@ if trialCount == 0; error('Zero trials extracted from marker data.'); end
 fprintf('Extracted %d valid trial segments.\n', trialCount);
 
 %% 3. Loop and Crop Tri-Camera Video Streams
-contrastVal = 1.3; brightnessVal = 0.2; gammaExponent = 1 / 1.3;
+contrastVal = [1.4, 1.4, 1.4]; brightnessVal = [0.35, 0.35, 0.35]; gammaExponent = [1 / 1.1, 1 / 1.1, 1 / 1.1];
 HARDWARE_FRAME_LAG = 10; % Compensates for camera driver acquisition latency
 eventDisplayWindow = 0.5;
 
@@ -179,8 +179,8 @@ for t = 1:trialCount
 
                 % Image Color Correction
                 imgDouble = double(imgRaw) / 255.0;
-                imgProcessed = (imgDouble - 0.5) * contrastVal + 0.5 + brightnessVal;
-                imgProcessed = imgProcessed .^ gammaExponent;
+                imgProcessed = (imgDouble - 0.5) * contrastVal(camIdx) + 0.5 + brightnessVal(camIdx);
+                imgProcessed = imgProcessed .^ gammaExponent(camIdx);
                 imgProcessed(imgProcessed < 0) = 0; imgProcessed(imgProcessed > 1) = 1;
                 img = uint8(imgProcessed * 255);
 
