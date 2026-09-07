@@ -1,6 +1,6 @@
 %% 1. Creating a log file and configuration
 log = struct; 
-[subID, sesID, startRun, taskLabel] = subject_info2(loc, 'e');
+[subID, sesID, startRun, startTrial, taskLabel, PHONE_IP] = subject_info2(loc, 'e');
 %% 2. Task setting
 log.config.task = task_setting();  
 log.config.stim = stim_setting();
@@ -72,32 +72,32 @@ outlet.push_sample({'Experiment_Start'});
 for b = 1:length(blocks.estimate)
     trials = blocks.estimate{b}; 
     numTrials = length(trials);
-        
+
     outlet.push_sample({sprintf('Block%d_Start', b)});
 
     for t = 1:numTrials
         globalTrialCount = globalTrialCount + 1;
-        
+
         % 1. Create Texture for current trial
         tex = Screen('MakeTexture', w1, trials(t).imageData);
-        
+
         % 2. Draw Image and Text Prompt
         Screen('DrawTexture', w1, tex, [], posC);
         DrawFormattedText(w1, 'The fighter is ___ cm tall', 'center', 10*verticalShift, log.config.task.colour.white);
-        
+
         % 3. Show Stimulus
         onset_stim = Screen('Flip', w1);
         outlet.push_sample({sprintf('Trial%d_Onset', t)});
-        
+
         % 4. EXPERIMENTER INPUT
         % We must allow the Command Window to receive characters
         ListenChar(0); 
         fprintf('\n--- Trial %d ---\n', t);
         fprintf('Sub: %s | Stance: %d | Lat: %s\n', trials(t).subID, trials(t).stance, trials(t).laterality);
-        
+
         % Script pauses here for experimenter input
         val = input('Enter participant estimate (cm) - If no answer please input 150: ');
-        
+
         % Re-block characters from the Command Window
         ListenChar(2); 
 
@@ -110,17 +110,17 @@ for b = 1:length(blocks.estimate)
         results.laterality(globalTrialCount) = trials(t).laterality;
         results.exemplar(globalTrialCount)   = trials(t).exemplar;
         results.estimate(globalTrialCount)   = val; % The input value
-    
+
         % 6. Resource Cleanup
         Screen('Close', tex);
-        
+
         % Check for Escape key
         [~,~,keyCode] = KbCheck;
         if keyCode(KbName('ESCAPE')); terminate = 1; break; end
     end
-    
+
     if terminate; break; end
-    
+
     outlet.push_sample({sprintf('Block%d_End', b)});
     DrawFormattedText(w1, 'Block Complete.\nPlease wait for the experimenter.', 'center', 'center', log.config.task.colour.white);
     Screen('Flip', w1);
