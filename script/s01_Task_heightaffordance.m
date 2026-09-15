@@ -51,7 +51,7 @@ b = startRun;
 
 while b <= maxBlocks && ~terminateExperiment
 
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).welcome , 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).welcome , 'center', 'center', log.config.task.colour.white, 80); 
     Screen('Flip', w1);
     
     experimenter_message(sprintf('RUN %d', b));
@@ -69,7 +69,7 @@ while b <= maxBlocks && ~terminateExperiment
         '2. Check: SideView + UpperView'});
     
     % EEG check
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_eeg, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_eeg, 'center', 'center', log.config.task.colour.white, 40); 
     Screen('Flip', w1);
     experimenter_message({'EEG: mbtStreamer', '', ...
         '1. Gel   : tell experimenter about bad channels (if any)', ...
@@ -77,7 +77,7 @@ while b <= maxBlocks && ~terminateExperiment
         '3. Start : mbtStreamer STREAM '});
 
     % Xsens calibration
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_motion, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_motion, 'center', 'center', log.config.task.colour.white, 40); 
     Screen('Flip', w1);
     experimenter_message({'XSENS: MVN and streaming_protocol', '', ...
         'Input/Load participant body measures                                       ','',...
@@ -88,7 +88,7 @@ while b <= maxBlocks && ~terminateExperiment
         '            (from 3rd time: calibrate until at least ACCEPTABLE)           '});
     
     % Loadsol calibration and recording
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_force, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_force, 'center', 'center', log.config.task.colour.white, 40); 
     Screen('Flip', w1);
     experimenter_message({'LOADSOL: loadapp on tablet', '', ...
         '(if not done)',...
@@ -99,14 +99,14 @@ while b <= maxBlocks && ~terminateExperiment
         '3. Start    : loadapp starts recording'});
 
     % Eye-tracking connection
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_eye, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).check_eye, 'center', 'center', log.config.task.colour.white, 80); 
     Screen('Flip', w1);
     experimenter_message({'Eye-Tracking: Neon', '', ...
         '1. Wear  : Experimenter brings phone back to participant', ...
         '2. Check : fixation is at the right position'});
 
     % Recording
-    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).eyetracking, 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, log.config.task.instruction.(sprintf('%s', languageInput)).eyetracking, 'center', 'center', log.config.task.colour.white, 80); 
     Screen('Flip', w1);
     experimenter_message({'LSL: LabRecorder', '', ...
         '1. Update: CHECK THAT ALL STREAMS ARE VISIBLE', ...
@@ -201,7 +201,7 @@ while b <= maxBlocks && ~terminateExperiment
     nextTexNeu = []; nextTexFgt = [];
     
     % Display block initialization screen
-    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s \nExperimenter can leave the tatami', b, log.config.task.instruction.(sprintf('%s', languageInput)).(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white); 
+    DrawFormattedText(w1, sprintf('BLOCK / RUN %d\n\n %s \nExperimenter can leave the tatami', b, log.config.task.instruction.(sprintf('%s', languageInput)).(sprintf('%s', taskLabel))), 'center', 'center', log.config.task.colour.white, 80); 
     Screen('Flip', w1); 
     experimenter_message({'Communicate:',...
         'ARE YOU READY TO FIGHT?',...
@@ -226,7 +226,7 @@ while b <= maxBlocks && ~terminateExperiment
         % --- INTERVENTION BRANCHING ROUTING MENU ---
         if intervene
             fprintf('\n[INTERCEPTED] Experimenter hit ESC. Presentation paused.\n');
-            DrawFormattedText(w1, 'Experiment Paused by Technician.\nWe are coming to you now', 'center', 'center', log.config.task.colour.white);
+            DrawFormattedText(w1, 'Experiment Paused by Technician.\nWe are coming to you now', 'center', 'center', log.config.task.colour.white, 80);
             Screen('Flip', w1);
             
             ShowCursor;
@@ -367,7 +367,7 @@ while b <= maxBlocks && ~terminateExperiment
         case 'Next Run'
             b = b + 1; 
             if b <= maxBlocks
-                DrawFormattedText(w1, 'Experimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white);
+                DrawFormattedText(w1, 'Experimenter will start the next run shortly.', 'center', 'center', log.config.task.colour.white, 80);
                 Screen('Flip', w1);
             end
         case 'Save & End Experiment'

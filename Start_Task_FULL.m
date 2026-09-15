@@ -1,8 +1,8 @@
 %% 1. Preparations 
-sca;            % Close PTB windows
-close all;      % Close MATLAB figures
-clearvars;      % Clear variables
-clc;            % Clear command window
+% sca;            % Close PTB windows
+% close all;      % Close MATLAB figures
+% clearvars;      % Clear variables
+% clc;            % Clear command window
 
 % Set paths
 loc = find_folderpath();
