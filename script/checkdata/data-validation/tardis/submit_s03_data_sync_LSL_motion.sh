@@ -3,9 +3,9 @@
 #SBATCH --output=logs/sync_%j.out
 #SBATCH --error=logs/sync_%j.err
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=16GB
-#SBATCH --time=04:00:00
+#SBATCH --time=10:00:00
 
 # Input parameters with fallbacks
 SUB_ID=${1:-"MH9HXJ"}
