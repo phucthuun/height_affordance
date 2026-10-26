@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Array of participants to process
+PARTICIPANTS=("5JL4EG" "885F30" "DNTVN8" "DR7CPU" "EG231A" "GT6L1K" "HRDJ59" "LH3V1F" "QVRKWK" "X0PVF3" "Y6YMP8")
+SESSION="S001"
+TASK="heightaffordance"
+
+# Ensure the logs directory exists BEFORE submitting
+mkdir -p logs
+
+# Convert line endings to UNIX format automatically
+sed -i 's/\r$//' *.sh 2>/dev/null
+
+for SUB in "${PARTICIPANTS[@]}"; do
+    echo "Submitting SLURM job for Subject: ${SUB}"
+    sbatch run_step1_to_2a.sh "${SUB}" "${SESSION}" "${TASK}"
+    
+    # Pause to prevent shared cache initialization collisions on cluster nodes
+    sleep 1s
+done
