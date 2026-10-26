@@ -1,29 +1,27 @@
 #!/bin/bash
-#SBATCH --job-name=judo_bemobil_import_preprocessing
-#SBATCH --output=logs/bemobil_import_%j.out
-#SBATCH --error=logs/bemobil__import_%j.err
+#SBATCH --job-name=judo_1_2a
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=6GB
 #SBATCH --time=04:00:00
+#
+# Steps 1 (XDF import) and 2A (trimming + preprocessing) for one participant.
+# Usage (from the scripts folder; logs/ must exist):  sbatch run_step1_to_2a.sh <participant> [session] [task]
 
-# Input parameters passed from batch submitter
-SUB_ID=${1:-"155T4T"}
-SES_ID=${2:-"S001"}
-TASK_NAME=${3:-"heightaffordance"}
+SUB_ID="${1:?Usage: sbatch run_step1_to_2a.sh <participant> [session] [task]}"
+SES_ID="${2:-S001}"
+TASK_NAME="${3:-heightaffordance}"
 
-# Ensure log directory exists
-mkdir -p logs
+# shellcheck source=judo_env.sh
+source "${SLURM_SUBMIT_DIR:-.}/judo_env.sh"
+echo "[judo] Steps 1 + 2A for ${SUB_ID} ${SES_ID} ${TASK_NAME}"
 
-# Load required HPC modules
-. /etc/profile
-module load matlab/R2023a
-chmod -R +x /mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0/
+matlab -nodisplay -nosplash -singleCompThread -batch \
+    "s01_judo_bemobil_import('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
 
-echo "Starting pipeline for Subject: ${SUB_ID}, Session: ${SES_ID}, Task: ${TASK_NAME}"
+matlab -nodisplay -nosplash -singleCompThread -batch \
+    "s02a_judo_bemobil_preprocess('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
 
-# Step 1: Execute XDF Import
-matlab -nodisplay -nosplash -singleCompThread -batch "s01_judo_bemobil_import('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
-
-# Step 2A: Execute Preprocessing Pipeline
-matlab -nodisplay -nosplash -singleCompThread -batch "s02a_judo_bemobil_preprocess('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
+echo "[judo] Steps 1 + 2A finished for ${SUB_ID}"

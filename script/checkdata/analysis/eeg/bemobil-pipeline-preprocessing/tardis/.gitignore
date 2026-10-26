@@ -1,0 +1,4 @@
+# local path overrides (step 2B on your own PC) must never reach tardis
+s00_local_paths.m
+# SLURM logs
+logs/

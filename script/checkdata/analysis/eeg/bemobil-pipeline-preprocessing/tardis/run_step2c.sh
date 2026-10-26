@@ -1,26 +1,32 @@
 #!/bin/bash
-#SBATCH --job-name=judo_bemobil_amica
-#SBATCH --output=logs/bemobil_amica_%j.out
-#SBATCH --error=logs/bemobil_amica_%j.err
+#SBATCH --job-name=judo_2c
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16GB
 #SBATCH --time=12:00:00
+#
+# Step 2C (AMICA, dipole fitting, ICLabel cleaning, QC report) for one participant.
+# Usage (from the scripts folder; logs/ must exist):
+#   sbatch run_step2c.sh <participant> [session] [task] [mode]
+# mode: auto | manualauto | empty for both. --cpus-per-task should match bemobil_config.max_threads (4).
+# A job that hits the time limit can simply be resubmitted: finished AMICA results are reused.
 
-# Input parameters passed from batch submitter
-SUB_ID=${1:-"155T4T"}
-SES_ID=${2:-"S001"}
-TASK_NAME=${3:-"heightaffordance"}
+SUB_ID="${1:?Usage: sbatch run_step2c.sh <participant> [session] [task] [mode]}"
+SES_ID="${2:-S001}"
+TASK_NAME="${3:-heightaffordance}"
+MODE="${4:-}"
 
-# Ensure log directory exists
-mkdir -p logs
+# shellcheck source=judo_env.sh
+source "${SLURM_SUBMIT_DIR:-.}/judo_env.sh"
+echo "[judo] Step 2C for ${SUB_ID} ${SES_ID} ${TASK_NAME} mode(s): ${MODE:-all}"
 
-# Load required HPC modules
-. /etc/profile
-module load matlab/R2022b
-chmod -R +x /mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0/plugins/
+if [[ -n "${MODE}" ]]; then
+    CALL="s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}', '${MODE}')"
+else
+    CALL="s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
+fi
+matlab -nodisplay -nosplash -batch "maxNumCompThreads(${JUDO_THREADS}); ${CALL}"
 
-echo "Starting AMICA + ICLabel (step 2C) for Subject: ${SUB_ID}, Session: ${SES_ID}, Task: ${TASK_NAME}"
-
-# Step 3: Execute AMICA + ICLabel
-matlab -batch "s02c_judo_bemobil_amica_and_iclabel('${SUB_ID}', '${SES_ID}', '${TASK_NAME}')"
+echo "[judo] Step 2C finished for ${SUB_ID}"

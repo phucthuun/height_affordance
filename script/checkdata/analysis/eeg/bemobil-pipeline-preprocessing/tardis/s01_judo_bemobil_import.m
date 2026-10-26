@@ -1,179 +1,182 @@
 function s01_judo_bemobil_import(participantID, sessionID, taskName)
-%% BeMoBIL XDF Import Script (HPC Tardis Version)
-% Usage:
-% matlab -batch "s01_hpc_import_xdf('MH9HXJ', 'S001', 'heightaffordance')"
-addpath('/mnt/beegfs/home/nguyen/matlab/toolbox/EEGLAB/eeglab2026.0.0')
-if isunix
-    opengl('save', 'software');
-    set(0, 'DefaultFigureVisible', 'off');
-end
+%S01_JUDO_BEMOBIL_IMPORT  Step 1: import the EEG stream of every XDF run of one participant/session/task.
+%
+%   matlab -batch "s01_judo_bemobil_import('155T4T', 'S001', 'heightaffordance')"
+%
+%   Input   10_Data/sourcedata/sub-<id>/ses-<ses>/lslglobal/sub-<id>_ses-<ses>_*<task>*.xdf
+%   Output  2_raw-EEGLAB/sub-<id>/ses-<ses>/sub-<run>_merged_EEG.set (+ .json provenance sidecar)
+%           1_BIDS-data/sub-<id>/ses-<ses>/sub-<run>_eeg.set + _channels.tsv + _eeg.json
+%           (BIDS-style copy, not a validated BIDS dataset; switch off with cfg.save_bids_copy)
+%
+%   Motion sensor channels in the EEG stream are typed (ACCEL / GYRO / MISC) here and split off in step 2A.
 
-run('s00_judo_bemobil_config.m');
-fprintf('============ BEMOBIL XDF IMPORT TO BIDS (HPC) ============\n');
+cfg = judo_setup('1');
+subEntity = sprintf('sub-%s', participantID);
+sesEntity = sprintf('ses-%s', sessionID);
 
-subEntity  = sprintf('sub-%s', participantID);
-sesEntity  = sprintf('ses-%s', sessionID);
-taskEntity = sprintf('task-%s', taskName);
-
-fprintf('\n--- Processing Target ---\n');
-fprintf('Participant: %s | Session: %s | Task: %s\n', participantID, sessionID, taskName);
-
-%% AUTOMATICALLY DETECT ALL RUNS
-xdf_folder = fullfile(bemobil_config.raw_data_folder, subEntity, sesEntity, 'lslglobal');
-
+xdf_folder = fullfile(cfg.raw_data_folder, subEntity, sesEntity, 'lslglobal');
 if ~exist(xdf_folder, 'dir')
-    error('LSL directory does not exist: %s', xdf_folder);
+    error('judo:s01', 'LSL folder does not exist: %s', xdf_folder);
 end
 
-search_pattern = fullfile(xdf_folder, sprintf('%s_%s_*%s*.xdf', subEntity, sesEntity, taskName));
-xdf_files = dir(search_pattern);
-
+xdf_files = dir(fullfile(xdf_folder, sprintf('%s_%s_*%s*.xdf', subEntity, sesEntity, taskName)));
 if isempty(xdf_files)
-    warning('No files matched strict pattern. Searching for any XDF files...');
-    xdf_files = dir(fullfile(xdf_folder, '*.xdf'));
+    present = dir(fullfile(xdf_folder, '*.xdf'));
+    error('judo:s01', ['No XDF file matches %s_%s_*%s*.xdf in %s.\nFiles present: %s\n' ...
+        'Rename the file(s) or check the task name; other files are not imported automatically.'], ...
+        subEntity, sesEntity, taskName, xdf_folder, strjoin({present.name}, ', '));
 end
+fprintf('[judo] %d XDF file(s) to import.\n', numel(xdf_files));
 
-if isempty(xdf_files)
-    error('No XDF files found in folder: %s', xdf_folder);
-end
+chanloc_template = fullfile(fileparts(which('dipfitdefs')), 'standard_BESA', 'standard-10-5-cap385.elp');
 
-fprintf('\nFound %d matching XDF file(s) to process.\n', length(xdf_files));
+for r = 1:numel(xdf_files)
+    xdf_name = xdf_files(r).name;
+    xdf_path = fullfile(xdf_folder, xdf_name);
+    runID = run_id_from_name(xdf_name, numel(xdf_files));
+    P = judo_paths(cfg, participantID, sessionID, taskName, runID);
 
-%% INITIALIZE EEGLAB
-[ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
+    fprintf('\n==== Importing run %d/%d: %s -> run %s ====\n', r, numel(xdf_files), xdf_name, runID);
 
-%% PROCESS RUNS
-for r = 1:length(xdf_files)
-    current_xdf_name = xdf_files(r).name;
-    xdf_fullpath = fullfile(xdf_folder, current_xdf_name);
-    
-    fprintf('\n==================================================\n');
-    fprintf(' Processing Run %d/%d: %s\n', r, length(xdf_files), current_xdf_name);
-    fprintf('==================================================\n');
-
-    runTokens = regexp(current_xdf_name, 'run-([a-zA-Z0-9]+)', 'tokens');
-    if ~isempty(runTokens)
-        runID = runTokens{1}{1};
-    else
-        runTokensAlt = regexp(current_xdf_name, '_(\d{2,3})_', 'tokens');
-        if ~isempty(runTokensAlt)
-            runID = runTokensAlt{1}{1};
-        else
-            runID = sprintf('%03d', r); 
-        end
-    end
-
-    runEntity = sprintf('run-%s', runID);
-
-    bids_out_folder = fullfile(bemobil_config.study_folder, bemobil_config.bids_target_folder, subEntity, sesEntity);
-    raw_eeglab_folder = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, subEntity, sesEntity);
-
-    if ~exist(bids_out_folder, 'dir'), mkdir(bids_out_folder); end
-    if ~exist(raw_eeglab_folder, 'dir'), mkdir(raw_eeglab_folder); end
-
-    % Load XDF Stream non-interactively
-    EEG = pop_loadxdf(xdf_fullpath, 'streamname', 'EEG');
-
+    EEG = pop_loadxdf(xdf_path, 'streamname', cfg.xdf_eeg_stream_name);
     if isempty(EEG.data)
-        error('EEG stream not found automatically in %s', current_xdf_name);
+        error('judo:s01', 'No "%s" stream in %s', cfg.xdf_eeg_stream_name, xdf_name);
     end
 
-    EEG.setname = sprintf('%s_%s_%s_%s_raw', subEntity, sesEntity, taskEntity, runEntity);
-    EEG.filename = '';
-    EEG.filepath = '';
-    EEG.subject = participantID;
-    EEG.session = str2double(regexprep(sessionID, '\D', ''));
+    EEG.setname   = sprintf('%s_raw', P.sub_base);
+    EEG.filename  = '';
+    EEG.filepath  = '';
+    EEG.subject   = participantID;
+    EEG.session   = str2double(regexprep(sessionID, '\D', ''));
     EEG.condition = taskName;
-    EEG.data = double(EEG.data);
+    EEG.data      = double(EEG.data);
 
-    % Legacy System Event Relabeling
+    % Legacy recording system: append the trial number to the condition markers (e.g. 'NPose' -> 'NPose12')
     if strcmpi(participantID, 'K2DJJ8')
-        current_trial = '';
-        relabel_targets = {'NPose', 'Neutral', 'Fight'};
-        n_relabeled = 0;
-
-        for e = 1:length(EEG.event)
-            evt_type = EEG.event(e).type;
-            if ~ischar(evt_type), continue; end
-
-            onset_match = regexp(evt_type, '^TrialOnset(\d+)$', 'tokens', 'once');
-            if ~isempty(onset_match)
-                current_trial = onset_match{1};
-                continue
-            end
-
-            if ~isempty(regexp(evt_type, '^TrialOffset\d+$', 'once'))
-                current_trial = '';
-                continue
-            end
-
-            if ismember(evt_type, relabel_targets) && ~isempty(current_trial)
-                EEG.event(e).type = [evt_type current_trial];
-                n_relabeled = n_relabeled + 1;
-            end
-        end
-        fprintf('Relabeled %d events.\n', n_relabeled);
+        EEG = relabel_legacy_events(EEG);
     end
 
-    % Channel Locations & Edits
-    if ~isempty(bemobil_config.channel_locations_filename)
-        chanlocs_file = fullfile(bemobil_config.study_folder, bemobil_config.raw_data_folder, subEntity, ...
-            bemobil_config.channel_locations_filename);
+    % Channel locations (template), then channel types
+    if ~isempty(cfg.channel_locations_filename)
+        chanlocs_file = fullfile(cfg.raw_data_folder, subEntity, cfg.channel_locations_filename);
         if exist(chanlocs_file, 'file')
             EEG = pop_chanedit(EEG, 'load', chanlocs_file);
         else
-            EEG = pop_chanedit(EEG, 'lookup', 'standard-10-5-cap385.elp');
+            warning('judo:s01', 'Channel location file not found (%s); using the 10-5 template.', chanlocs_file);
+            EEG = pop_chanedit(EEG, 'lookup', chanloc_template);
         end
     else
-        EEG = pop_chanedit(EEG, 'lookup', 'standard-10-5-cap385.elp');
+        EEG = pop_chanedit(EEG, 'lookup', chanloc_template);
+    end
+    for ch = 1:EEG.nbchan
+        EEG.chanlocs(ch).type = channel_type(EEG.chanlocs(ch).labels, cfg);
     end
 
-    EEG.etc.bemobil = struct();
-    EEG.etc.bemobil.participantID = participantID;
-    EEG.etc.bemobil.sessionID = sessionID;
-    EEG.etc.bemobil.runID = runID;
-    EEG.etc.bemobil.taskName = taskName;
-    EEG.etc.bemobil.original_xdf = xdf_fullpath;
-    EEG.etc.bemobil.import_date = datestr(now, 'yyyy-mm-dd HH:MM:SS');
-
+    prov = judo_provenance(cfg);
+    EEG.etc.bemobil = struct('participantID', participantID, 'sessionID', sessionID, 'runID', runID, ...
+        'taskName', taskName, 'original_xdf', xdf_path, 'import_date', prov.date);
+    EEG.etc.judo.import = prov;
     EEG = eeg_checkset(EEG);
 
-    % Output Files
-    bids_filename = sprintf('%s_%s_%s_%s_eeg.set', subEntity, sesEntity, taskEntity, runEntity);
-    pop_saveset(EEG, 'filename', bids_filename, 'filepath', bids_out_folder);
-
-    raw_filename = sprintf('%s_%s_%s_%s_%s', subEntity, sesEntity, taskEntity, runEntity, bemobil_config.merged_filename);
-    pop_saveset(EEG, 'filename', raw_filename, 'filepath', raw_eeglab_folder);
-
-    % Sidecar JSON/TSV Generation
-    channels_tsv = fullfile(bids_out_folder, strrep(bids_filename, '_eeg.set', '_channels.tsv'));
-    fid = fopen(channels_tsv, 'w');
-    fprintf(fid, 'name\ttype\tunits\tsampling_frequency\treference\n');
-    for ch = 1:EEG.nbchan
-        ch_type = 'EEG';
-        if isfield(EEG.chanlocs(ch), 'type') && ~isempty(EEG.chanlocs(ch).type)
-            ch_type = EEG.chanlocs(ch).type;
-        end
-        fprintf(fid, '%s\t%s\tuV\t%.1f\tn/a\n', EEG.chanlocs(ch).labels, ch_type, EEG.srate);
+    % EEGLAB copy that step 2A reads
+    if ~exist(P.raw_folder, 'dir')
+        mkdir(P.raw_folder);
     end
-    fclose(fid);
+    pop_saveset(EEG, 'filename', P.merged_file, 'filepath', P.raw_folder);
+    judo_json_write(fullfile(P.raw_folder, strrep(P.merged_file, '.set', '.json')), struct( ...
+        'step', '1', 'source_xdf', xdf_path, 'stream', cfg.xdf_eeg_stream_name, 'srate', EEG.srate, ...
+        'n_channels', EEG.nbchan, 'duration_s', EEG.pnts / EEG.srate, 'n_events', numel(EEG.event), ...
+        'provenance', prov));
 
-    eeg_json = fullfile(bids_out_folder, strrep(bids_filename, '_eeg.set', '_eeg.json'));
-    json_struct = struct(...
-        'TaskName', taskName, ...
-        'SamplingFrequency', EEG.srate, ...
-        'EEGChannelCount', sum(strcmpi({EEG.chanlocs.type}, 'EEG') | cellfun(@isempty, {EEG.chanlocs.type})), ...
-        'EOGChannelCount', sum(strcmpi({EEG.chanlocs.type}, 'EOG')), ...
-        'RecordingType', 'continuous', ...
-        'SoftwareFilters', 'n/a', ...
-        'PowerLineFrequency', 50, ...
-        'EEGReference', 'n/a' ...
-    );
-    json_text = jsonencode(json_struct);
-    fid = fopen(eeg_json, 'w');
-    fprintf(fid, '%s', json_text);
-    fclose(fid);
+    if cfg.save_bids_copy
+        write_bids_copy(EEG, P, cfg, taskName);
+    end
 end
 
-fprintf('\n============ XDF IMPORT COMPLETE ============\n');
+fprintf('\n[judo] Step 1 done for %s.\n', participantID);
+end
+
+%% ------------------------------------------------------------------------------------------------------------
+function runID = run_id_from_name(name, n_files)
+tok = regexp(name, 'run-([a-zA-Z0-9]+)', 'tokens', 'once');
+if isempty(tok)
+    tok = regexp(name, '_(\d{2,3})_', 'tokens', 'once');
+end
+if ~isempty(tok)
+    runID = tok{1};
+elseif n_files == 1
+    runID = '001';
+    warning('judo:s01', 'No run number in %s; using run 001 because it is the only file.', name);
+else
+    error('judo:s01', ['No run number ("run-001") in %s and there are %d files, so runs cannot be told apart.\n' ...
+        'Rename the files to contain run-<ID>.'], name, n_files);
+end
+end
+
+function EEG = relabel_legacy_events(EEG)
+current_trial = '';
+targets = {'NPose', 'Neutral', 'Fight'};
+n = 0;
+for e = 1:numel(EEG.event)
+    t = EEG.event(e).type;
+    if ~ischar(t)
+        continue
+    end
+    onset = regexp(t, '^TrialOnset(\d+)$', 'tokens', 'once');
+    if ~isempty(onset)
+        current_trial = onset{1};
+    elseif ~isempty(regexp(t, '^TrialOffset\d+$', 'once'))
+        current_trial = '';
+    elseif ismember(t, targets) && ~isempty(current_trial)
+        EEG.event(e).type = [t current_trial];
+        n = n + 1;
+    end
+end
+fprintf('[judo] Relabeled %d legacy condition events.\n', n);
+end
+
+function t = channel_type(label, cfg)
+if ~ismember(label, cfg.motion_channel_labels)
+    t = 'EEG';
+elseif startsWith(label, 'Acc')
+    t = 'ACCEL';
+elseif startsWith(label, 'Gyro')
+    t = 'GYRO';
+else
+    t = 'MISC';
+end
+end
+
+function write_bids_copy(EEG, P, cfg, taskName)
+if ~exist(P.bids_folder, 'dir')
+    mkdir(P.bids_folder);
+end
+pop_saveset(EEG, 'filename', P.bids_file, 'filepath', P.bids_folder);
+
+types = {EEG.chanlocs.type};
+tsv = fullfile(P.bids_folder, strrep(P.bids_file, '_eeg.set', '_channels.tsv'));
+fid = fopen(tsv, 'w');
+fprintf(fid, 'name\ttype\tunits\tsampling_frequency\treference\n');
+for ch = 1:EEG.nbchan
+    if strcmp(types{ch}, 'EEG')
+        bids_type = 'EEG'; units = 'uV'; ref = cfg.ref_channel;
+    else
+        bids_type = 'MISC'; units = 'n/a'; ref = 'n/a'; % accelerometer / gyroscope / orientation
+    end
+    fprintf(fid, '%s\t%s\t%s\t%.4f\t%s\n', EEG.chanlocs(ch).labels, bids_type, units, EEG.srate, ref);
+end
+fclose(fid);
+
+meta = struct( ...
+    'TaskName', taskName, ...
+    'SamplingFrequency', EEG.srate, ...
+    'EEGChannelCount', sum(strcmp(types, 'EEG')), ...
+    'EOGChannelCount', 0, ...
+    'MiscChannelCount', sum(~strcmp(types, 'EEG')), ...
+    'RecordingType', 'continuous', ...
+    'RecordingDuration', EEG.pnts / EEG.srate, ...
+    'SoftwareFilters', 'n/a', ...
+    'PowerLineFrequency', cfg.power_line_hz, ...
+    'EEGReference', cfg.ref_channel);
+judo_json_write(fullfile(P.bids_folder, strrep(P.bids_file, '_eeg.set', '_eeg.json')), meta);
 end
