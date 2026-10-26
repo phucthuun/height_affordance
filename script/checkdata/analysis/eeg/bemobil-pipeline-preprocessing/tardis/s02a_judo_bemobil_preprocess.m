@@ -9,9 +9,6 @@ if isunix
 end
 [ALLEEG, EEG, CURRENTSET, ALLCOM] = eeglab;
 run('s00_judo_bemobil_config.m');
-if strcmpi(participantID, 'K2DJJ8') | strcmpi(participantID, 'MH9HXJ')
-    bemobil_config.channels_to_remove = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ'};
-end
 force_recompute = 1;
 
 input_filepath = fullfile(bemobil_config.study_folder, bemobil_config.raw_EEGLAB_data_folder, ...
@@ -44,6 +41,20 @@ for r = 1:length(run_files)
     fprintf('==================================================\n');
 
     EEG = pop_loadset('filename', target_merged_filename, 'filepath', input_filepath);
+
+    % Define candidate motion channels to check
+    target_motion_chans = {'AccX','AccY','AccZ','GyroX','GyroY','GyroZ','QuatW','QuatX','QuatY','QuatZ'};
+    
+    % Find which target channels actually exist in this dataset
+    existing_chan_labels = {EEG.chanlocs.labels};
+    chans_present = intersect(existing_chan_labels, target_motion_chans);
+    
+    % Assign dynamically to the configuration struct for BeMoBIL processing
+    bemobil_config.channels_to_remove = chans_present;
+    
+    if ~isempty(chans_present)
+        fprintf('Found channels to remove: %s\n', strjoin(chans_present, ', '));
+    end
 
     % Dynamic trimming
     allevents = {EEG.event.type}';
